@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: projectc-solana-connector
+  labels:
+    app: projectc-solana-connector
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: projectc-solana-connector
+  template:
+    metadata:
+      labels:
+        app: projectc-solana-connector
+    spec:
+      containers:
+        - name: projectc-solana-connector
+          image: REPLACE_IMAGE
+          ports:
+            - containerPort: 8081
