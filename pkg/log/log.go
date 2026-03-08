@@ -53,7 +53,7 @@ func Info(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Info(args)
+	log.WithFields(fields).Info(args...)
 }
 
 // Infoln logs to the INFO log.
@@ -65,7 +65,7 @@ func Infoln(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Infoln(args)
+	log.WithFields(fields).Infoln(args...)
 }
 
 // Infof logs to the INFO log.
@@ -89,7 +89,7 @@ func Warning(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Warning(args)
+	log.WithFields(fields).Warning(args...)
 }
 
 // Warningln logs to the WARNING and INFO logs.
@@ -101,7 +101,7 @@ func Warningln(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Warningln(args)
+	log.WithFields(fields).Warningln(args...)
 }
 
 // Warningf logs to the WARNING and INFO logs.
@@ -125,7 +125,7 @@ func Error(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Error(args)
+	log.WithFields(fields).Error(args...)
 }
 
 // Errorln logs to the ERROR, WARNING, and INFO logs.
@@ -137,7 +137,7 @@ func Errorln(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Errorln(args)
+	log.WithFields(fields).Errorln(args...)
 }
 
 // Errorf logs to the ERROR, WARNING, and INFO logs.
@@ -162,7 +162,7 @@ func Fatal(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Fatal(args)
+	log.WithFields(fields).Fatal(args...)
 }
 
 // Fatalln logs to the FATAL, ERROR, WARNING, and INFO logs,
@@ -175,7 +175,7 @@ func Fatalln(args ...interface{}) {
 		KEY_FUNCTION_NAME: mehtod,
 		KEY_LINE_NUM:      lineNum,
 	}
-	log.WithFields(fields).Fatalln(args)
+	log.WithFields(fields).Fatalln(args...)
 }
 
 // Fatalf logs to the FATAL, ERROR, WARNING, and INFO logs,

@@ -6,5 +6,7 @@ import (
 )
 
 func Version(c *gin.Context) {
-	c.JSON(200, config.FLAG_KEY_SERVER_VERSION)
+	c.JSON(200, gin.H{
+		"version": config.GetString(config.FLAG_KEY_SERVER_VERSION),
+	})
 }

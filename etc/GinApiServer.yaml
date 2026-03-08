@@ -3,9 +3,61 @@ server:
   port: 8081
   version: "0.1.0"
 gin:
-  mode: debug
+  mode: release
 log:
   level: info
 auth:
   username: "test"
   password: "test"
+connector:
+  requestTimeoutMs: 5000
+  retryTimes: 2
+  retryBackoffMs: 300
+  commitment: "confirmed"
+  pollIntervalMs: 5000
+  reorgDepth: 32
+  txSubscribeWindow: 180
+  idempotencyTtlSec: 3600
+  subscriptionBuffer: 1024
+  callback:
+    mode: "rabbitmq"
+    host: "dev-mq.lls.com"
+    port: 5672
+    username: "projectc"
+    password: "projectc"
+    virtual-host: "/projectc-dtt"
+    exchange: "tx_callback_fanout_exchange"
+    exchangeType: "fanout"
+    routingKey: ""
+    durable: true
+    mandatory: false
+    persistent: true
+    confirm: true
+    reconnectIntervalMs: 3000
+  subscriptionStore:
+    mysql:
+      username: "root"
+      password: "123456"
+      host: "mysql01.dev.lls.com"
+      port: 4120
+      database: "projectc-solana-connector"
+      maxOpenconns: 200
+      maxIdleConns: 200
+      connMaxLifeSec: 300
+networks:
+  solana:
+    code: "solana"
+    chainId: "devnet"
+    nativeSymbol: "SOL"
+    lamportsPerToken: 1000000000
+    endpoints:
+      - "https://api.devnet.solana.com"
+    wsEndpoints: []
+    faucet:
+      enabled: false
+      privateKeyBase58: ""
+      fromAddress: ""
+      computeUnitPrice: 0
+    contracts: {}
+tokens: {}
+contractInfo: {}

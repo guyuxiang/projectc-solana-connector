@@ -467,6 +467,10 @@ POST /inner/chain-data-subscribe/{networkCode}/block-sync
 }
 
 # 订阅回调消息体规范
+通过RabbitMQ推送消息
+exchange：tx_callback_fanout_exchange
+exchangeType：fanout
+
 
 ## 交易出块回调
 
@@ -480,7 +484,7 @@ POST /inner/chain-data-subscribe/{networkCode}/block-sync
 
 }
 
-## 交易撤销回调
+## 交易被区块链撤销回滚的回调
 
 {
 

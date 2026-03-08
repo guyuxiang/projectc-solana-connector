@@ -7,7 +7,6 @@ import (
 	_ "github.com/guyuxiang/projectc-solana-connector/docs"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/controller"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/log"
-	"github.com/guyuxiang/projectc-solana-connector/pkg/middleware"
 	ginSwagger "github.com/swaggo/gin-swagger"
 	"github.com/swaggo/gin-swagger/swaggerFiles"
 )
@@ -39,17 +38,25 @@ func InstallRoutes(r *gin.Engine) {
 		os.Exit(1)
 	})
 
+	chainController := controller.NewChainController()
 	rootGroup := r.Group("/api/v1")
-	// AuthRequired middleware that provide basic auth
-	rootGroup.Use(middleware.BasicAuthMiddleware())
+	rootGroup.GET("/ping", controller.Ping)
 
-	{
-		// a ping api to test basic auth
-		rootGroup.GET("/ping", controller.Ping)
-	}
+	registerChainRoutes(r, chainController)
+	registerChainRoutes(rootGroup, chainController)
+}
 
-	{
-		toDoController := controller.NewToDoController()
-		rootGroup.GET("/todo/get", toDoController.GetToDo)
-	}
+func registerChainRoutes(router gin.IRoutes, chainController controller.ChainController) {
+	router.POST("/inner/chain-invoke/solana/common/tx-send", chainController.TxSend)
+	router.POST("/inner/chain-invoke/solana/wallet/faucet", chainController.Faucet)
+	router.POST("/inner/chain-data/solana/common/tx-query", chainController.TxQuery)
+	router.POST("/inner/chain-data/solana/common/address-balance", chainController.AddressBalance)
+	router.POST("/inner/chain-data/solana/common/token-supply", chainController.TokenSupply)
+	router.POST("/inner/chain-data/solana/common/token-balance", chainController.TokenBalance)
+	router.POST("/inner/chain-data/solana/common/latest-block", chainController.LatestBlock)
+	router.POST("/inner/chain-data-subscribe/solana/tx-subscribe", chainController.TxSubscribe)
+	router.POST("/inner/chain-data-subscribe/solana/address-subscribe", chainController.AddressSubscribe)
+	router.POST("/inner/chain-data-subscribe/solana/tx-subscribe-cancel", chainController.TxSubscribeCancel)
+	router.POST("/inner/chain-data-subscribe/solana/address-subscribe-cancel", chainController.AddressSubscribeCancel)
+	router.POST("/inner/chain-data-subscribe/solana/block-sync", chainController.BlockSync)
 }

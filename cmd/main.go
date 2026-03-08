@@ -7,6 +7,7 @@ import (
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/log"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/route"
+	"github.com/guyuxiang/projectc-solana-connector/pkg/service"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/util"
 )
 
@@ -15,6 +16,7 @@ func main() {
 	r := gin.Default()
 	m := config.GetString(config.FLAG_KEY_GIN_MODE)
 	gin.SetMode(m)
+	service.GetApp()
 
 	route.InstallRoutes(r)
 	serverBindAddr := fmt.Sprintf("%s:%d", config.GetString(config.FLAG_KEY_SERVER_HOST), config.GetInt(config.FLAG_KEY_SERVER_PORT))

@@ -13,7 +13,7 @@ var flagsOpts = []flagOpt{
 	},
 	{
 		optName:         FLAG_KEY_GIN_MODE,
-		optDefaultValue: "debug",
+		optDefaultValue: "release",
 		optUsage:        "gin mode",
 	},
 	{
