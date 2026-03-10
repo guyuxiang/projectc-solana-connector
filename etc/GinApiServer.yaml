@@ -15,6 +15,7 @@ connector:
   retryBackoffMs: 300
   commitment: "confirmed"
   pollIntervalMs: 5000
+  wsIdleTimeoutMs: 90000
   reorgDepth: 32
   txSubscribeWindow: 180
   idempotencyTtlSec: 3600
@@ -52,7 +53,8 @@ networks:
     lamportsPerToken: 1000000000
     endpoints:
       - "https://api.devnet.solana.com"
-    wsEndpoints: []
+    wsEndpoints:
+      - "wss://api.devnet.solana.com"
     faucet:
       enabled: false
       privateKeyBase58: ""

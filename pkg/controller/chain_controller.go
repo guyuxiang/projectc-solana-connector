@@ -174,7 +174,7 @@ func (cc *chainController) AddressSubscribeCancel(c *gin.Context) {
 	if !bindJSON(c, &req) {
 		return
 	}
-	if err := cc.subscription.CancelAddressSubscription(req.Address, req.EndBlockNumber); err != nil {
+	if err := cc.subscription.CancelAddressSubscription(req.Address); err != nil {
 		fail(c, http.StatusBadRequest, err)
 		return
 	}

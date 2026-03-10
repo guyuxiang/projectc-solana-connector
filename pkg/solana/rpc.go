@@ -205,6 +205,13 @@ type SignatureInfo struct {
 	BlockTime *int64      `json:"blockTime"`
 }
 
+type SignatureQueryOptions struct {
+	Limit          int
+	Before         string
+	Until          string
+	MinContextSlot uint64
+}
+
 type LatestBlockhashResponse struct {
 	Context struct {
 		Slot uint64 `json:"slot"`
@@ -230,6 +237,14 @@ type SignatureStatusResponse struct {
 		Err                interface{} `json:"err"`
 		ConfirmationStatus string      `json:"confirmationStatus"`
 	} `json:"value"`
+}
+
+type SignatureStatus struct {
+	Exists             bool
+	Slot               uint64
+	Confirmations      *uint64
+	Err                interface{}
+	ConfirmationStatus string
 }
 
 var _ sync.Locker

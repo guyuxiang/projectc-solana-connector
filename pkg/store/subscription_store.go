@@ -19,7 +19,7 @@ type SubscriptionStore interface {
 	SaveTxSubscription(ctx context.Context, sub *models.TxSubscription) error
 	UpdateTxSubscriptionStatus(ctx context.Context, txCode string, status string, completed bool) error
 	SaveAddressSubscription(ctx context.Context, sub *models.AddressSubscription) error
-	DeleteAddressSubscription(ctx context.Context, address string) error
+	UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string, completed bool) error
 	SavePublishedState(ctx context.Context, txCode string, state models.PublishedTxState) error
 	DeletePublishedState(ctx context.Context, txCode string) error
 }
@@ -45,15 +45,15 @@ type txSubscriptionModel struct {
 func (txSubscriptionModel) TableName() string { return "connector_tx_subscriptions" }
 
 type addressSubscriptionModel struct {
-	Address          string    `gorm:"column:address;primaryKey;size:128"`
-	NetworkCode      string    `gorm:"column:network_code;size:64;not null"`
-	StartBlockNumber uint64    `gorm:"column:start_block_number;not null"`
-	EndBlockNumber   *uint64   `gorm:"column:end_block_number"`
-	LastBefore       string    `gorm:"column:last_before;size:128;not null"`
-	HistoryComplete  bool      `gorm:"column:history_complete;not null"`
-	SeenTxsJSON      string    `gorm:"column:seen_txs_json;type:mediumtext;not null"`
-	CreatedAt        time.Time `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt        time.Time `gorm:"column:updated_at;autoUpdateTime"`
+	Address            string    `gorm:"column:address;primaryKey;size:128"`
+	NetworkCode        string    `gorm:"column:network_code;size:64;not null"`
+	LastObservedSlot   uint64    `gorm:"column:last_observed_slot;not null"`
+	LastObservedTxCode string    `gorm:"column:last_observed_tx_code;size:128;not null"`
+	SubscriptionStatus string    `gorm:"column:subscription_status;size:32;not null"`
+	Completed          bool      `gorm:"column:completed;not null"`
+	SeenTxsJSON        string    `gorm:"column:seen_txs_json;type:mediumtext;not null"`
+	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt          time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (addressSubscriptionModel) TableName() string { return "connector_address_subscriptions" }
@@ -62,6 +62,7 @@ type publishedStateModel struct {
 	TxCode      string    `gorm:"column:tx_code;primaryKey;size:128"`
 	NetworkCode string    `gorm:"column:network_code;size:64;not null"`
 	BlockNumber uint64    `gorm:"column:block_number;not null"`
+	State       string    `gorm:"column:state;size:32;not null"`
 	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
@@ -125,19 +126,25 @@ func (s *mySQLSubscriptionStore) Load(ctx context.Context) (*models.Subscription
 	}
 
 	var addressRows []addressSubscriptionModel
-	if err := s.db.WithContext(ctx).Find(&addressRows).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("subscription_status = ? OR subscription_status = ''", models.TxSubscriptionStatusActive).
+		Find(&addressRows).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range addressRows {
+		status := row.SubscriptionStatus
+		if status == "" {
+			status = models.TxSubscriptionStatusActive
+		}
 		sub := &models.AddressSubscription{
-			CreatedAt:        row.CreatedAt,
-			Address:          row.Address,
-			NetworkCode:      row.NetworkCode,
-			StartBlockNumber: row.StartBlockNumber,
-			EndBlockNumber:   row.EndBlockNumber,
-			LastBefore:       row.LastBefore,
-			HistoryComplete:  row.HistoryComplete,
-			SeenTxs:          decodeSeenTxs(row.SeenTxsJSON),
+			CreatedAt:          row.CreatedAt,
+			Address:            row.Address,
+			NetworkCode:        row.NetworkCode,
+			LastObservedSlot:   row.LastObservedSlot,
+			LastObservedTxCode: row.LastObservedTxCode,
+			SubscriptionStatus: status,
+			Completed:          row.Completed,
+			SeenTxs:            decodeSeenTxs(row.SeenTxsJSON),
 		}
 		snapshot.AddressSubs[sub.Address] = sub
 	}
@@ -151,6 +158,7 @@ func (s *mySQLSubscriptionStore) Load(ctx context.Context) (*models.Subscription
 			CreatedAt:   row.CreatedAt,
 			NetworkCode: row.NetworkCode,
 			BlockNumber: row.BlockNumber,
+			State:       row.State,
 		}
 	}
 	return snapshot, nil
@@ -189,25 +197,31 @@ func (s *mySQLSubscriptionStore) SaveAddressSubscription(ctx context.Context, su
 		return err
 	}
 	model := addressSubscriptionModel{
-		Address:          sub.Address,
-		NetworkCode:      sub.NetworkCode,
-		StartBlockNumber: sub.StartBlockNumber,
-		EndBlockNumber:   sub.EndBlockNumber,
-		LastBefore:       sub.LastBefore,
-		HistoryComplete:  sub.HistoryComplete,
-		SeenTxsJSON:      seenTxsJSON,
-		CreatedAt:        sub.CreatedAt,
+		Address:            sub.Address,
+		NetworkCode:        sub.NetworkCode,
+		LastObservedSlot:   sub.LastObservedSlot,
+		LastObservedTxCode: sub.LastObservedTxCode,
+		SubscriptionStatus: sub.SubscriptionStatus,
+		Completed:          sub.Completed,
+		SeenTxsJSON:        seenTxsJSON,
+		CreatedAt:          sub.CreatedAt,
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "address"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"network_code", "start_block_number", "end_block_number", "last_before", "history_complete", "seen_txs_json", "updated_at",
+			"network_code", "last_observed_slot", "last_observed_tx_code", "subscription_status", "completed", "seen_txs_json", "updated_at",
 		}),
 	}).Create(&model).Error
 }
 
-func (s *mySQLSubscriptionStore) DeleteAddressSubscription(ctx context.Context, address string) error {
-	return s.db.WithContext(ctx).Delete(&addressSubscriptionModel{}, "address = ?", address).Error
+func (s *mySQLSubscriptionStore) UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string, completed bool) error {
+	return s.db.WithContext(ctx).Model(&addressSubscriptionModel{}).
+		Where("address = ?", address).
+		Updates(map[string]interface{}{
+			"subscription_status": status,
+			"completed":           completed,
+			"updated_at":          time.Now(),
+		}).Error
 }
 
 func (s *mySQLSubscriptionStore) SavePublishedState(ctx context.Context, txCode string, state models.PublishedTxState) error {
@@ -215,12 +229,13 @@ func (s *mySQLSubscriptionStore) SavePublishedState(ctx context.Context, txCode 
 		TxCode:      txCode,
 		NetworkCode: state.NetworkCode,
 		BlockNumber: state.BlockNumber,
+		State:       state.State,
 		CreatedAt:   state.CreatedAt,
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "tx_code"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"network_code", "block_number", "updated_at",
+			"network_code", "block_number", "state", "updated_at",
 		}),
 	}).Create(&model).Error
 }

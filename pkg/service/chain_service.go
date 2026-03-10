@@ -25,30 +25,42 @@ type ChainService interface {
 	GetTokenBalance(ctx context.Context, tokenCode string, address string) (*models.TokenBalanceResponse, error)
 	GetLatestBlock(ctx context.Context) (*models.LatestBlockResponse, error)
 	GetTransactionReceipt(ctx context.Context, txCode string) (*models.ChainTx, []models.ChainEvent, bool, error)
-	FetchAddressSignatures(ctx context.Context, address string, limit int, before string) ([]solana.SignatureInfo, error)
+	FetchAddressSignatures(ctx context.Context, address string, opts solana.SignatureQueryOptions) ([]solana.SignatureInfo, error)
 	FetchBlockTransactions(ctx context.Context, slot uint64) ([]models.TxCallbackMessage, error)
 	CheckSignatureLive(ctx context.Context, txCode string) (bool, error)
+	GetSignatureStatus(ctx context.Context, txCode string) (*solana.SignatureStatus, error)
+	WatchSignature(ctx context.Context, txCode string) (*solana.SignatureNotification, error)
+	WatchProgramLogs(ctx context.Context, program string, onSubscribed func() error, handler func(solana.LogsNotification) error) error
 }
 
 func NewChainService(cfg *config.Config) ChainService {
 	timeout := time.Duration(cfg.Connector.RequestTimeoutMs) * time.Millisecond
 	backoff := time.Duration(cfg.Connector.RetryBackoffMs) * time.Millisecond
 	clients := make(map[string]*solana.Client, len(cfg.Networks))
+	wsClients := make(map[string]*solana.WSClient, len(cfg.Networks))
 	for code, network := range cfg.Networks {
 		clients[code] = solana.NewClient(network.Endpoints, timeout, cfg.Connector.RetryTimes, backoff, cfg.Connector.Commitment)
+		wsEndpoints := network.WsEndpoints
+		if len(wsEndpoints) == 0 {
+			wsEndpoints = solana.DeriveWSEndpoints(network.Endpoints)
+		}
+		idleTimeout := time.Duration(cfg.Connector.WsIdleTimeoutMs) * time.Millisecond
+		wsClients[code] = solana.NewWSClient(wsEndpoints, timeout, idleTimeout)
 	}
 	return &chainService{
 		cfg:              cfg,
 		clients:          clients,
+		wsClients:        wsClients,
 		network:          mustResolveSingleNetwork(cfg),
 		idempotencyStore: newIdempotencyStore(time.Duration(cfg.Connector.IdempotencyTtlSec) * time.Second),
 	}
 }
 
 type chainService struct {
-	cfg     *config.Config
-	clients map[string]*solana.Client
-	network *config.SolanaNetwork
+	cfg       *config.Config
+	clients   map[string]*solana.Client
+	wsClients map[string]*solana.WSClient
+	network   *config.SolanaNetwork
 
 	idempotencyStore *idempotencyStore
 }
@@ -301,22 +313,30 @@ func (s *chainService) GetTransactionReceipt(ctx context.Context, txCode string)
 	}
 
 	tx := toChainTx(network.Code, network, result)
-	events := toChainEvents(network.Code, result)
+	events := toChainEvents(s.cfg, network.Code, result)
 	return &tx, events, true, nil
 }
 
-func (s *chainService) FetchAddressSignatures(ctx context.Context, address string, limit int, before string) ([]solana.SignatureInfo, error) {
+func (s *chainService) FetchAddressSignatures(ctx context.Context, address string, opts solana.SignatureQueryOptions) ([]solana.SignatureInfo, error) {
 	client, err := s.resolveClient()
 	if err != nil {
 		return nil, err
 	}
 
 	cfg := map[string]interface{}{
-		"limit":      limit,
 		"commitment": client.Commitment(),
 	}
-	if before != "" {
-		cfg["before"] = before
+	if opts.Limit > 0 {
+		cfg["limit"] = opts.Limit
+	}
+	if opts.Before != "" {
+		cfg["before"] = opts.Before
+	}
+	if opts.Until != "" {
+		cfg["until"] = opts.Until
+	}
+	if opts.MinContextSlot > 0 {
+		cfg["minContextSlot"] = opts.MinContextSlot
 	}
 
 	var result []solana.SignatureInfo
@@ -354,9 +374,9 @@ func (s *chainService) FetchBlockTransactions(ctx context.Context, slot uint64) 
 	messages := make([]models.TxCallbackMessage, 0, len(result.Transactions))
 	for _, tx := range result.Transactions {
 		chainTx := toChainTx(clientNetwork.Code, clientNetwork, tx)
-		events := toChainEvents(clientNetwork.Code, tx)
+		events := toChainEvents(s.cfg, clientNetwork.Code, tx)
 		messages = append(messages, models.TxCallbackMessage{
-			Tx:       chainTx,
+			Tx:       &chainTx,
 			TxEvents: events,
 		})
 	}
@@ -364,9 +384,17 @@ func (s *chainService) FetchBlockTransactions(ctx context.Context, slot uint64) 
 }
 
 func (s *chainService) CheckSignatureLive(ctx context.Context, txCode string) (bool, error) {
-	client, err := s.resolveClient()
+	status, err := s.GetSignatureStatus(ctx, txCode)
 	if err != nil {
 		return false, err
+	}
+	return status.Exists, nil
+}
+
+func (s *chainService) GetSignatureStatus(ctx context.Context, txCode string) (*solana.SignatureStatus, error) {
+	client, err := s.resolveClient()
+	if err != nil {
+		return nil, err
 	}
 
 	var resp solana.SignatureStatusResponse
@@ -377,18 +405,49 @@ func (s *chainService) CheckSignatureLive(ctx context.Context, txCode string) (b
 		},
 	}
 	if err := client.Call(ctx, "getSignatureStatuses", params, &resp); err != nil {
-		return false, err
+		return nil, err
 	}
 	if len(resp.Value) == 0 || resp.Value[0] == nil {
-		return false, nil
+		return &solana.SignatureStatus{}, nil
 	}
-	return true, nil
+	item := resp.Value[0]
+	return &solana.SignatureStatus{
+		Exists:             true,
+		Slot:               item.Slot,
+		Confirmations:      item.Confirmations,
+		Err:                item.Err,
+		ConfirmationStatus: item.ConfirmationStatus,
+	}, nil
+}
+
+func (s *chainService) WatchSignature(ctx context.Context, txCode string) (*solana.SignatureNotification, error) {
+	client, err := s.resolveWSClient()
+	if err != nil {
+		return nil, err
+	}
+	return client.WaitSignatureNotification(ctx, txCode, "confirmed")
+}
+
+func (s *chainService) WatchProgramLogs(ctx context.Context, program string, onSubscribed func() error, handler func(solana.LogsNotification) error) error {
+	client, err := s.resolveWSClient()
+	if err != nil {
+		return err
+	}
+	return client.StreamLogsNotifications(ctx, program, "confirmed", onSubscribed, handler)
 }
 
 func (s *chainService) resolveClient() (*solana.Client, error) {
 	client, ok := s.clients[s.network.Code]
 	if !ok {
 		return nil, fmt.Errorf("solana rpc client not initialized")
+	}
+	return client, nil
+}
+
+func (s *chainService) resolveWSClient() (*solana.WSClient, error) {
+	client, ok := s.wsClients[s.network.Code]
+	if !ok {
+		return nil, fmt.Errorf("solana websocket client not initialized")
 	}
 	return client, nil
 }

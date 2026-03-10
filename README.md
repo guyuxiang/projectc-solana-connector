@@ -1,175 +1,182 @@
 projectc-solana-connector
 ===================
 
-projectc-solana-connector is a HTTP apiserver framework based on [Gin](https://github.com/gin-gonic/gin).
+`projectc-solana-connector` 是一个面向 Solana 的 HTTP API 与链上订阅服务。
 
-## Introduction
+它当前实现了两类能力：
 
-`projectc-solana-connector`是一个基于[gin](https://github.com/gin-gonic/gin)框架写的ApiServer框架，主要用于企业生产环境中的快速开发
+- 基础链上查询与交易发送
+- 基于 WebSocket + HTTP/RPC 的交易生命周期订阅
 
-## Features
+## Overview
 
-* 1、支持configmap reload api
-  ```go
-  // config reload
-  r.Any("/-/reload", func(c *gin.Context) {
-          log.Info("===== Server Stop! Cause: Config Reload. =====")
-          os.Exit(1)
-  })
-  ```
+服务对外暴露 HTTP 接口，对内通过以下链路处理订阅：
 
-* 2、支持ping-pong健康检查&版本获取
-  ```go
-  // a ping api test
-  r.GET("/ping", controller.Ping)
-  
-  // get projectc-solana-connector version
-  r.GET("/version", controller.Version)
-  ```
+- WebSocket 订阅负责尽快发现新交易
+- HTTP/RPC `getSignatureStatuses` 与 `getTransaction` 负责推进交易状态
+- 数据库存储订阅状态、交易状态和 program 补拉 checkpoint
 
-* 3、支持dump-goroutine-stack-traces
-  ```bash
-  $ kill -SIGUSR1 41307
-  
-  === BEGIN goroutine stack dump ===
-  goroutine 20 [running]:
-  github.com/guyuxiang/projectc-solana-connector/pkg/util.dumpStacks()
-          /root/go/src/github.com/guyuxiang/projectc-solana-connector/pkg/util/trap.go:23 +0x6d
-  github.com/guyuxiang/projectc-solana-connector/pkg/util.SetupSigusr1Trap.func1(0xc000332240)
-          /root/go/src/github.com/guyuxiang/projectc-solana-connector/pkg/util/trap.go:16 +0x34
-  created by github.com/guyuxiang/projectc-solana-connector/pkg/util.SetupSigusr1Trap
-          /root/go/src/github.com/guyuxiang/projectc-solana-connector/pkg/util/trap.go:14 +0xab
-  
-  goroutine 1 [IO wait]:
-  internal/poll.runtime_pollWait(0x7fccf3b86f68, 0x72, 0x0)
-          /usr/local/go/src/runtime/netpoll.go:182 +0x56
-  internal/poll.(*pollDesc).wait(0xc000442618, 0x72, 0x0, 0x0, 0xbadadd)
-          /usr/local/go/src/internal/poll/fd_poll_runtime.go:87 +0x9b
-  internal/poll.(*pollDesc).waitRead(...)
-          /usr/local/go/src/internal/poll/fd_poll_runtime.go:92
-  internal/poll.(*FD).Accept(0xc000442600, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0, 0x0)
-          /usr/local/go/src/internal/poll/fd_unix.go:384 +0x1ba
-  net.(*netFD).accept(0xc000442600, 0xb51080, 0x50, 0xc0000a77c0)
-          /usr/local/go/src/net/fd_unix.go:238 +0x42
-  net.(*TCPListener).accept(0xc00049e110, 0xc000046a80, 0x7fccf3be26d0, 0xc000000180)
-          /usr/local/go/src/net/tcpsock_posix.go:139 +0x32
-  net.(*TCPListener).AcceptTCP(0xc00049e110, 0x40d9b8, 0x30, 0xb51080)
-          /usr/local/go/src/net/tcpsock.go:247 +0x48
-  net/http.tcpKeepAliveListener.Accept(0xc00049e110, 0xb51080, 0xc0002d0e70, 0xadef20, 0x2294c70)
-          /usr/local/go/src/net/http/server.go:3264 +0x2f
-  net/http.(*Server).Serve(0xc0002d7d40, 0xcb8640, 0xc00049e110, 0x0, 0x0)
-          /usr/local/go/src/net/http/server.go:2859 +0x22d
-  net/http.(*Server).ListenAndServe(0xc0002d7d40, 0xc0002d7d40, 0xc000355ea8)
-          /usr/local/go/src/net/http/server.go:2797 +0xe4
-  net/http.ListenAndServe(...)
-          /usr/local/go/src/net/http/server.go:3037
-  github.com/gin-gonic/gin.(*Engine).Run(0xc000394000, 0xc000355f48, 0x1, 0x1, 0x0, 0x0)
-          /root/go/src/github.com/guyuxiang/projectc-solana-connector/vendor/github.com/gin-gonic/gin/gin.go:294 +0x140
-  main.main()
-          /root/go/src/github.com/guyuxiang/projectc-solana-connector/cmd/main.go:22 +0x2c4
-  
-  goroutine 19 [syscall]:
-  os/signal.signal_recv(0xcb28a0)
-          /usr/local/go/src/runtime/sigqueue.go:139 +0x9c
-  os/signal.loop()
-          /usr/local/go/src/os/signal/signal_unix.go:23 +0x22
-  created by os/signal.init.0
-          /usr/local/go/src/os/signal/signal_unix.go:29 +0x41
-  
-  === END goroutine stack dump ===
-  ```
+当前订阅语义为：
 
-## Framework
+- `tx-subscribe`
+  实际语义是订阅指定 `signature`
+- `address-subscribe`
+  接口字段名仍为 `address`，但在 Solana 上实际应传 `programId`
 
-`projectc-solana-connector`框架的核心就是pkg包，下面主要针对该包结构进行描述：
+## Subscription Model
 
-```bash
-pkg/
-├── config
-│   ├── config.go
-│   ├── key.go
-│   ├── model.go
-│   └── opt_defs.go
-├── controller
-│   ├── ping.go
-│   ├── todo.go
-│   └── version.go
-├── log
-│   └── log.go
-├── middleware
-│   ├── basic_auth_middleware.go
-├── models
-│   └── common.go
-├── route
-│   └── routes.go
-├── service
-│   └── todo.go
-├── store
-└── util
+### Transaction Lifecycle
+
+交易状态定义如下：
+
+- `CONFIRMED`
+  已确认，可进入大多数业务流程
+- `FINALIZED`
+  最终确认，适合高价值入账
+- `DROPPED`
+  被分叉丢弃 / 查询不到 / 超过订阅截止区块仍未出现
+- `REVERTED`
+  之前见过，后续链上状态消失或确认失败
+
+状态推进路径通常为：
+
+`CONFIRMED -> FINALIZED`
+
+异常路径为：
+
+- 从未真正上链且超过订阅窗口：`DROPPED`
+- 已见过或已确认，后续链上状态消失：`REVERTED`
+
+### Tx Subscribe
+
+`tx-subscribe` 通过 Solana `signatureSubscribe` 监听指定签名。
+
+- WebSocket 订阅 `confirmed` 级别消息
+- 定时补拉 `getSignatureStatuses` / `getTransaction`
+- 将状态推进到 `CONFIRMED` / `FINALIZED`
+- 超过 `endBlockNumber` 仍未出现则标记 `DROPPED`
+
+### Address Subscribe
+
+`address-subscribe` 在 Solana 上实际用于订阅 `programId`。
+
+- WebSocket 通过 `logsSubscribe` 监听 program 相关日志
+- 收到日志后提取签名并立即 `getTransaction` 拉详情
+- 定时补拉负责推进该签名的生命周期状态
+- watcher 重连前会按 `lastObservedSlot` 回补断连窗口内遗漏的 program 交易
+- 不再接受也不维护区块范围参数
+
+注意：
+
+- `address` 字段只是兼容已有接口命名
+- 业务上应传入 `programId`
+
+## WebSocket Reliability
+
+当前 WebSocket 连接使用标准 `ping/pong` 心跳保活。
+
+- 客户端固定周期发送 `ping`
+- 收到 `pong` 后刷新 read deadline
+- 如果超时收不到 `pong`，读循环会报错
+- watcher 捕获错误后自动重连并重新订阅
+
+这意味着当前实现不再依赖“无消息静默超时直接重连”，而是依赖真正的 WebSocket 心跳。
+
+### Gap Backfill
+
+program 订阅在每次启动 watcher 和每次重连前都会做一次 gap backfill：
+
+- 调用 `getSignaturesForAddress(programId)` 分页拉取签名
+- 使用 `limit` 控制单次批量
+- 使用 `before` 继续翻页
+- 使用 `until` 截止到上一次 checkpoint 签名
+- 使用 `minContextSlot` 约束最小上下文 slot
+- 再按签名调用 `getTransaction` 补详情
+
+首次 watcher 启动如果还没有 checkpoint，不回扫全链历史，而是直接从当前最新 slot 开始跟踪未来。
+
+## Callback Payload
+
+交易状态回调消息体：
+
+```json
+{
+  "state": "CONFIRMED",
+  "previousState": "",
+  "tx": {},
+  "txEvents": []
+}
 ```
 
-* config：主要用于配置文件，实现：文件+环境变量+命令行参数读取
-* controller: 对应MVC中controller，调用service中的接口进行实际处理，自己只做数据校验与拼接
-* service: 负责主要的逻辑实现
-* log: 日志模块，实现：模块名(文件名)+函数名+行数+日志级别
-* middleware: 中间件，负责通用的处理，例如：鉴权
-* models: 对应MVC中的model
-* route: gin路由
-* store: 存储模块，可以添加MySQL、Redis等
-* util: 通用的库函数
+说明：
 
-## Usage
+- `state`: 当前交易状态
+- `previousState`: 上一状态，首次回调为空
+- `tx`: `DROPPED` / `REVERTED` 时可能为空
+- `txEvents`: `DROPPED` / `REVERTED` 时可能为空
 
-* step1 - 替换项目名称
+兼容性回滚消息体：
 
-  实际使用中，通常需要将`projectc-solana-connector`替换成业务需要的后台server名称，可以执行如下命令：
+```json
+{
+  "txCode": "5Qx...",
+  "networkCode": "solana",
+  "state": "REVERTED",
+  "previousState": "CONFIRMED"
+}
+```
 
-  ```bash
-  $ grep -rl projectc-solana-connector . | xargs sed -i 's/projectc-solana-connector/youapiserver/g' 
-  ```
-  
-* step2 - 开发业务controller和service
+## Key Config
 
-  框架中已经集成了一个示例(todo)：
-  
-  ```go
-  // controller(pkg/controller/todo.go)
-  type ToDoController interface {
-  	GetToDo(c *gin.Context)
-  }
-  
-  // service(pkg/service/todo.go)
-  type ToDoService interface {
-  	Get()
-  }
-  ```
-  
-  我们需要按照自身业务需求开发todo(替换成任意功能)的controller和service逻辑。另外你也可以参考todo添加其它功能对应的controller和service
-   
-* step3 - 启动服务  
+主要配置位于 [`etc/GinApiServer.yaml`](/usr/src/golang/projectc-solana-connector/etc/GinApiServer.yaml)。
 
-  可以直接启动运行服务，如下：
+关键配置项：
 
-  ```bash
-  $ bash hack/start.sh
-  ```
-  
-  也可以在Kubernetes集群中启动服务，如下：
-  
-  ```bash
-  # generated image
-  $ make dockerfiles.build
-  # retag and push to your docker registry
-  $ docker tag guyuxiang/projectc-solana-connector:v0.1.0 xxx/guyuxiang/projectc-solana-connector:v0.1.0
-  $ docker push xxx/guyuxiang/projectc-solana-connector:v0.1.0
-  # Update the deployment to use the built image name
-  $ sed -i 's|REPLACE_IMAGE|xxx/guyuxiang/projectc-solana-connector:v0.1.0|g' hack/deploy/deployment.yaml
-  # create service 
-  $ kubectl apply -f hack/deploy/service.yaml
-  # create deployment
-  $ kubectl apply -f hack/deploy/deployment.yaml
-  ```
+- `connector.pollIntervalMs`
+  定时补拉周期
+- `connector.wsIdleTimeoutMs`
+  WebSocket `pong` 超时时间
+- `connector.retryBackoffMs`
+  watcher 重连退避
+- `connector.commitment`
+  HTTP/RPC 查询使用的 commitment
+- `networks.solana.endpoints`
+  Solana HTTP RPC 地址
+- `networks.solana.wsEndpoints`
+  Solana WebSocket RPC 地址
 
-## Refs
+## Storage
 
-* [dump-goroutine-stack-traces](https://colobu.com/2016/12/21/how-to-dump-goroutine-stack-traces/)
+MySQL 中当前维护三类数据：
+
+- `connector_tx_subscriptions`
+  交易订阅
+- `connector_address_subscriptions`
+  program 订阅，包含 `last_observed_slot` 和 `last_observed_tx_code`
+- `connector_published_states`
+  交易生命周期状态
+
+## Run
+
+启动服务：
+
+```bash
+bash hack/start.sh
+```
+
+本地测试：
+
+```bash
+mkdir -p /tmp/projectc-go-cache
+GOCACHE=/tmp/projectc-go-cache GOPROXY=off go test ./...
+```
+
+## Files
+
+核心代码位置：
+
+- [`pkg/service/subscription_service.go`](/usr/src/golang/projectc-solana-connector/pkg/service/subscription_service.go)
+- [`pkg/service/chain_service.go`](/usr/src/golang/projectc-solana-connector/pkg/service/chain_service.go)
+- [`pkg/solana/ws.go`](/usr/src/golang/projectc-solana-connector/pkg/solana/ws.go)
+- [`pkg/store/subscription_store.go`](/usr/src/golang/projectc-solana-connector/pkg/store/subscription_store.go)
+- [`Connector.md`](/usr/src/golang/projectc-solana-connector/Connector.md)

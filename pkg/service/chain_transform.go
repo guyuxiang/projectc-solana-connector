@@ -44,27 +44,47 @@ func toChainTx(networkCode string, network *config.SolanaNetwork, tx solana.Tran
 	}
 }
 
-func toChainEvents(networkCode string, tx solana.TransactionResult) []models.ChainEvent {
-	signature := ""
-	if len(tx.Transaction.Signatures) > 0 {
-		signature = tx.Transaction.Signatures[0]
-	}
-	timestamp := int64(0)
-	if tx.BlockTime != nil {
-		timestamp = *tx.BlockTime * 1000
-	}
-
+func toChainEvents(cfg *config.Config, networkCode string, tx solana.TransactionResult) []models.ChainEvent {
+	enriched := newEnrichedTransaction(cfg, networkCode, tx)
 	events := make([]models.ChainEvent, 0, len(tx.Transaction.Message.Instructions))
+	eventIdx := 0
+	decodedPrograms := make(map[string]struct{})
+
 	for idx, instruction := range tx.Transaction.Message.Instructions {
+		decoderKey := instruction.ProgramID
+		if decoderKey == "" {
+			decoderKey = instruction.Program
+		}
+		if decoder := defaultDecoderRegistry.get(instruction.ProgramID, instruction.Program); decoder != nil {
+			if _, seen := decodedPrograms[decoderKey]; !seen {
+				domainEvents, err := decoder.Decode(enriched)
+				if err == nil {
+					for _, domainEvent := range domainEvents {
+						events = append(events, models.ChainEvent{
+							Code:        fmt.Sprintf("%s#%d", enriched.Signature, eventIdx),
+							NetworkCode: networkCode,
+							BlockNumber: tx.Slot,
+							Timestamp:   enriched.Timestamp,
+							Type:        domainEvent.Type,
+							Data:        domainEvent.Data,
+						})
+						eventIdx++
+					}
+				}
+				decodedPrograms[decoderKey] = struct{}{}
+			}
+			continue
+		}
+
 		payload, eventType, ok := normalizeInstructionEvent(instruction)
 		if !ok {
 			continue
 		}
 		events = append(events, models.ChainEvent{
-			Code:        fmt.Sprintf("%s#%d", signature, idx),
+			Code:        fmt.Sprintf("%s#%d", enriched.Signature, idx+eventIdx),
 			NetworkCode: networkCode,
 			BlockNumber: tx.Slot,
-			Timestamp:   timestamp,
+			Timestamp:   enriched.Timestamp,
 			Type:        eventType,
 			Data:        payload,
 		})
@@ -136,6 +156,57 @@ func extractNativeTransferSummary(tx solana.TransactionResult, network *config.S
 		return from, to, strconv.FormatFloat(fromLamports(uint64(asFloat(rawLamports)), network.LamportsPerToken), 'f', -1, 64), true
 	}
 	return "", "", "", false
+}
+
+type tokenAccountContext struct {
+	Mint  string
+	Owner string
+}
+
+func buildTokenAccountContext(tx solana.TransactionResult) map[string]tokenAccountContext {
+	out := make(map[string]tokenAccountContext)
+	for _, record := range tx.Meta.PreTokenBalances {
+		applyTokenBalanceRecord(out, tx, record)
+	}
+	for _, record := range tx.Meta.PostTokenBalances {
+		applyTokenBalanceRecord(out, tx, record)
+	}
+	return out
+}
+
+func applyTokenBalanceRecord(out map[string]tokenAccountContext, tx solana.TransactionResult, record solana.TokenBalanceRecord) {
+	if int(record.AccountIndex) >= len(tx.Transaction.Message.AccountKeys) {
+		return
+	}
+	account := tx.Transaction.Message.AccountKeys[record.AccountIndex].Pubkey
+	if account == "" {
+		return
+	}
+	out[account] = tokenAccountContext{
+		Mint:  record.Mint,
+		Owner: record.Owner,
+	}
+}
+
+func resolveTokenAccountOwner(ctx map[string]tokenAccountContext, account string) string {
+	if item, ok := ctx[account]; ok {
+		return item.Owner
+	}
+	return ""
+}
+
+func resolveTokenAccountMint(ctx map[string]tokenAccountContext, account string) string {
+	if item, ok := ctx[account]; ok {
+		return item.Mint
+	}
+	return ""
+}
+
+func readString(m map[string]interface{}, key string) string {
+	if value, ok := m[key].(string); ok {
+		return value
+	}
+	return ""
 }
 
 func asFloat(v interface{}) float64 {

@@ -322,7 +322,7 @@ URL格式：/inner/chain-data-subscribe/{networkCode}/xxx
 
 ### 订阅指定交易
 
-订阅指定网络的指定交易。
+订阅指定网络的指定交易签名。底层通过 Solana WebSocket `signatureSubscribe` 监听签名状态，再通过 HTTP/RPC `getTransaction` 拉取交易详情。
 
 POST /inner/chain-data-subscribe/{networkCode}/tx-subscribe
 
@@ -330,7 +330,7 @@ POST /inner/chain-data-subscribe/{networkCode}/tx-subscribe
 
 {
 
-\"txCode\": \"xxx\", // 交易标识
+\"txCode\": \"xxx\", // 交易 signature
 
 \"subscribeRange\": {
 
@@ -354,7 +354,7 @@ POST /inner/chain-data-subscribe/{networkCode}/tx-subscribe
 
 ### 订阅指定地址
 
-订阅指定网络的指定地址的关联交易。
+订阅指定网络的指定 program 的关联交易。接口字段仍然叫 `address`，但实际应传入 Solana `programId`。底层通过 WebSocket 日志订阅监听 program 相关交易，再通过 HTTP/RPC `getTransaction` 拉取交易详情。
 
 POST /inner/chain-data-subscribe/{networkCode}/address-subscribe
 
@@ -362,15 +362,7 @@ POST /inner/chain-data-subscribe/{networkCode}/address-subscribe
 
 {
 
-\"address\": \"xxx\", // 指定地址
-
-\"subscribeRange\": {
-
-\"startBlockNumber\": 1, // 起始区块高度（闭区间）
-
-\"endBlockNumber\": 5, // 终止区块高度（闭区间），可以为空
-
-}
+\"address\": \"xxx\", // 指定 programId
 
 }
 
@@ -388,7 +380,7 @@ POST /inner/chain-data-subscribe/{networkCode}/address-subscribe
 
 ### 取消指定交易订阅
 
-取消订阅指定网络的指定交易。
+取消订阅指定网络的指定交易签名。
 
 POST /inner/chain-data-subscribe/{networkCode}/tx-subscribe-cancel
 
@@ -396,7 +388,7 @@ POST /inner/chain-data-subscribe/{networkCode}/tx-subscribe-cancel
 
 {
 
-\"txCode\": \"xxx\", // 交易标识
+\"txCode\": \"xxx\", // 交易 signature
 
 }
 
@@ -414,7 +406,7 @@ POST /inner/chain-data-subscribe/{networkCode}/tx-subscribe-cancel
 
 ### 取消指定地址订阅
 
-取消订阅指定网络指定地址的关联交易。
+取消指定网络指定 program 订阅。接口字段仍然叫 `address`，但实际应传入 `programId`。
 
 POST /inner/chain-data-subscribe/{networkCode}/address-subscribe-cancel
 
@@ -422,9 +414,7 @@ POST /inner/chain-data-subscribe/{networkCode}/address-subscribe-cancel
 
 {
 
-\"address\": \"xxx\", // 地址
-
-\"endBlockNumber\": 10, // 终止区块高度（闭区间）
+\"address\": \"xxx\", // programId
 
 }
 
@@ -478,9 +468,13 @@ exchangeType：fanout
 
 {
 
-\"tx\": {}, // ChainTx
+\"state\": \"CONFIRMED\", // CONFIRMED/FINALIZED/DROPPED/REVERTED
 
-\"txEvents\": \[\], // ChainEvent array in the tx
+\"previousState\": \"\", // 上一状态，首次回调为空
+
+\"tx\": {}, // ChainTx，DROPPED/REVERTED 时可能为空
+
+\"txEvents\": \[\], // ChainEvent array in the tx，DROPPED/REVERTED 时可能为空
 
 }
 
@@ -492,6 +486,10 @@ exchangeType：fanout
 
 \"networkCode\": \"polygon\", // 网络标识
 
+\"state\": \"REVERTED\", // 固定为 REVERTED
+
+\"previousState\": \"CONFIRMED\" // 回滚前状态
+
 }
 
 # 链数据订阅模块设计
@@ -502,9 +500,9 @@ exchangeType：fanout
 
 订阅模块对外提供两种维度的订阅功能：地址订阅、交易订阅。
 
-**地址订阅**：接收一个地址（必选）和一个区块范围（可选），订阅模块将保证：回调该区块范围内与该地址相关的所有交易。
+**地址订阅**：接口字段名为地址，Solana 实际上传入 `programId`。模块通过 WebSocket 日志订阅发现关联交易，再对交易签名做统一状态推进。
 
-**交易订阅**：接收一个交易标识（必选）和一个截止同步的区块高度（必选），订阅模块将保证：如该交易在截止同步的区块高度之前出块，回调该交易。
+**交易订阅**：接收一个交易签名（必选）和一个截止同步的区块高度（必选），模块将持续回调该交易的生命周期状态，直到 `FINALIZED`、`DROPPED` 或 `REVERTED`。
 
 目前evm-connector的地址订阅基于eth_getLogs实现，故只支持合约地址的订阅。后续如果需要支持非合约地址的订阅，需要更换底层实现，例如切换至通过地址查询关联交易的API。
 
@@ -512,11 +510,11 @@ exchangeType：fanout
 
 ## 关键思路
 
-订阅模块的回调消息为交易维度，包含1交易+交易内的所有业务事件。
+订阅模块的回调消息为交易维度，包含交易生命周期状态以及交易内的所有业务事件。
 
 在解析和回调事件时，订阅模块会忽略不关心的事件，只回调业务关心的事件，即《附录：链上事件》中声明的事件。
 
-将地址订阅转换为交易订阅，然后走统一的交易订阅逻辑。
+WebSocket 订阅 `CONFIRMED` 级别消息，再结合 `getSignatureStatuses` 与 `getTransaction` 将交易推进到 `CONFIRMED`、`FINALIZED`，或在分叉/过期时推进到 `DROPPED`、`REVERTED`。
 
 保证在一次订阅请求接收后至少回调一次。
 

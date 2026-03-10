@@ -36,6 +36,7 @@ type Connector struct {
 	RetryBackoffMs     int                      `yaml:"retryBackoffMs"`
 	Commitment         string                   `yaml:"commitment"`
 	PollIntervalMs     int                      `yaml:"pollIntervalMs"`
+	WsIdleTimeoutMs    int                      `yaml:"wsIdleTimeoutMs"`
 	ReorgDepth         uint64                   `yaml:"reorgDepth"`
 	TxSubscribeWindow  uint64                   `yaml:"txSubscribeWindow"`
 	IdempotencyTtlSec  int                      `yaml:"idempotencyTtlSec"`
