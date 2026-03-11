@@ -22,7 +22,6 @@ type ChainController interface {
 	AddressSubscribe(c *gin.Context)
 	TxSubscribeCancel(c *gin.Context)
 	AddressSubscribeCancel(c *gin.Context)
-	BlockSync(c *gin.Context)
 }
 
 func NewChainController() ChainController {
@@ -175,18 +174,6 @@ func (cc *chainController) AddressSubscribeCancel(c *gin.Context) {
 		return
 	}
 	if err := cc.subscription.CancelAddressSubscription(req.Address); err != nil {
-		fail(c, http.StatusBadRequest, err)
-		return
-	}
-	ok(c, nil)
-}
-
-func (cc *chainController) BlockSync(c *gin.Context) {
-	var req models.BlockSyncRequest
-	if !bindJSON(c, &req) {
-		return
-	}
-	if err := cc.subscription.SyncBlockRange(c.Request.Context(), req.BeginBlockNumber, req.EndBlockNumber); err != nil {
 		fail(c, http.StatusBadRequest, err)
 		return
 	}

@@ -9,6 +9,7 @@ import (
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/log"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/models"
+	"github.com/guyuxiang/projectc-solana-connector/pkg/mq"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/solana"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/store"
 )
@@ -18,10 +19,9 @@ type SubscriptionService interface {
 	RegisterAddressSubscription(req models.AddressSubscribeRequest) error
 	CancelTxSubscription(txCode string) error
 	CancelAddressSubscription(address string) error
-	SyncBlockRange(ctx context.Context, begin uint64, end uint64) error
 }
 
-func NewSubscriptionService(cfg *config.Config, chain ChainService, publisher CallbackPublisher, subscriptionStore store.SubscriptionStore) SubscriptionService {
+func NewSubscriptionService(cfg *config.Config, chain ChainService, publisher mq.CallbackPublisher, subscriptionStore store.SubscriptionStore) SubscriptionService {
 	s := &subscriptionService{
 		cfg:             cfg,
 		chain:           chain,
@@ -41,7 +41,7 @@ func NewSubscriptionService(cfg *config.Config, chain ChainService, publisher Ca
 type subscriptionService struct {
 	cfg       *config.Config
 	chain     ChainService
-	publisher CallbackPublisher
+	publisher mq.CallbackPublisher
 	store     store.SubscriptionStore
 
 	mu              sync.RWMutex
@@ -93,11 +93,9 @@ func (s *subscriptionService) RegisterAddressSubscription(req models.AddressSubs
 			LastObservedSlot:   0,
 			LastObservedTxCode: "",
 			SubscriptionStatus: models.TxSubscriptionStatusActive,
-			SeenTxs:            make(map[string]struct{}, s.cfg.Connector.SubscriptionBuffer),
 		}
 	} else {
 		sub.SubscriptionStatus = models.TxSubscriptionStatusActive
-		sub.Completed = false
 	}
 	toSave := cloneAddressSub(sub)
 	s.addressSubs[req.Address] = cloneAddressSub(sub)
@@ -112,25 +110,7 @@ func (s *subscriptionService) CancelTxSubscription(txCode string) error {
 }
 
 func (s *subscriptionService) CancelAddressSubscription(address string) error {
-	return s.updateAddressSubscriptionStatus(address, models.TxSubscriptionStatusCancelled, true)
-}
-
-func (s *subscriptionService) SyncBlockRange(ctx context.Context, begin uint64, end uint64) error {
-	for slot := begin; slot <= end; slot++ {
-		messages, err := s.chain.FetchBlockTransactions(ctx, slot)
-		if err != nil {
-			return err
-		}
-		for _, msg := range messages {
-			if msg.Tx == nil {
-				continue
-			}
-			if err := s.transitionTxState(msg.Tx.Code, models.TxStateFinalized, msg.Tx, msg.TxEvents, msg.Tx.BlockNumber); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
+	return s.updateAddressSubscriptionStatus(address, models.TxSubscriptionStatusCancelled)
 }
 
 func (s *subscriptionService) start() {
@@ -140,7 +120,7 @@ func (s *subscriptionService) start() {
 	go func() {
 		defer ticker.Stop()
 		for range ticker.C {
-			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.cfg.Connector.RequestTimeoutMs)*time.Millisecond)
+			ctx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultRequestTimeoutMs)*time.Millisecond)
 			s.poll(ctx)
 			cancel()
 		}
@@ -179,7 +159,6 @@ func (s *subscriptionService) poll(ctx context.Context) {
 	}
 	s.pollTxSubscriptions(ctx, latest.BlockNumber)
 	s.pollTrackedTransactions(ctx, latest.BlockNumber)
-	s.gcTrackedTransactions(latest.BlockNumber)
 }
 
 func (s *subscriptionService) pollTxSubscriptions(ctx context.Context, latestBlock uint64) {
@@ -212,25 +191,6 @@ func (s *subscriptionService) pollTrackedTransactions(ctx context.Context, lates
 		if err := s.advanceTxState(ctx, txCode, 0, false, latestBlock); err != nil {
 			log.Warningf("advance tracked tx failed network=%s tx=%s err=%v", state.NetworkCode, txCode, err)
 		}
-	}
-}
-
-func (s *subscriptionService) gcTrackedTransactions(latestBlock uint64) {
-	s.mu.RLock()
-	states := make(map[string]models.PublishedTxState, len(s.publishedState))
-	for txCode, state := range s.publishedState {
-		states[txCode] = state
-	}
-	s.mu.RUnlock()
-
-	for txCode, state := range states {
-		if !isTerminalTxState(state.State) {
-			continue
-		}
-		if latestBlock <= state.BlockNumber+s.cfg.Connector.ReorgDepth {
-			continue
-		}
-		s.deleteTrackedState(txCode)
 	}
 }
 
@@ -312,12 +272,37 @@ func (s *subscriptionService) runTxWatcher(ctx context.Context, txCode string) {
 				return
 			}
 			log.Warningf("ws signature watcher failed network=%s tx=%s err=%v", s.chainNetworkCode(), txCode, err)
-			if !sleepWithContext(ctx, time.Duration(s.cfg.Connector.RetryBackoffMs)*time.Millisecond) {
+			if !sleepWithContext(ctx, time.Duration(defaultRetryBackoffMs)*time.Millisecond) {
 				return
 			}
 			continue
 		}
-		_ = notification
+
+		queryCtx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultRequestTimeoutMs)*time.Millisecond)
+		resp, err := s.chain.QueryTransaction(queryCtx, txCode)
+		cancel()
+		if err != nil {
+			log.Warningf("load confirmed tx failed network=%s tx=%s slot=%d err=%v", s.chainNetworkCode(), txCode, notification.Slot, err)
+			if !sleepWithContext(ctx, time.Duration(defaultRetryBackoffMs)*time.Millisecond) {
+				return
+			}
+			continue
+		}
+		if resp == nil || resp.Tx == nil {
+			log.Warningf("confirmed tx detail not found yet network=%s tx=%s slot=%d", s.chainNetworkCode(), txCode, notification.Slot)
+			if !sleepWithContext(ctx, time.Duration(defaultRetryBackoffMs)*time.Millisecond) {
+				return
+			}
+			continue
+		}
+		if err := s.transitionTxState(txCode, models.TxStateConfirmed, resp.Tx, resp.TxEvents, notification.Slot); err != nil {
+			log.Warningf("publish confirmed tx failed network=%s tx=%s slot=%d err=%v", s.chainNetworkCode(), txCode, notification.Slot, err)
+			if !sleepWithContext(ctx, time.Duration(defaultRetryBackoffMs)*time.Millisecond) {
+				return
+			}
+			continue
+		}
+		return
 	}
 }
 
@@ -339,7 +324,7 @@ func (s *subscriptionService) runAddressWatcher(ctx context.Context, address str
 				return
 			}
 			log.Warningf("ws program watcher failed network=%s program=%s err=%v", s.chainNetworkCode(), address, err)
-			if !sleepWithContext(ctx, time.Duration(s.cfg.Connector.RetryBackoffMs)*time.Millisecond) {
+			if !sleepWithContext(ctx, time.Duration(defaultRetryBackoffMs)*time.Millisecond) {
 				return
 			}
 			continue
@@ -358,11 +343,7 @@ func (s *subscriptionService) handleProgramNotification(address string, notifica
 	sub = cloneAddressSub(sub)
 	s.mu.RUnlock()
 
-	if _, seen := sub.SeenTxs[notification.Signature]; seen {
-		return nil
-	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.cfg.Connector.RequestTimeoutMs)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultRequestTimeoutMs)*time.Millisecond)
 	defer cancel()
 	resp, err := s.chain.QueryTransaction(ctx, notification.Signature)
 	if err != nil {
@@ -374,12 +355,10 @@ func (s *subscriptionService) handleProgramNotification(address string, notifica
 		}
 	}
 
-	sub.SeenTxs[notification.Signature] = struct{}{}
 	if notification.Slot > sub.LastObservedSlot {
 		sub.LastObservedSlot = notification.Slot
 	}
 	sub.LastObservedTxCode = notification.Signature
-	s.trimSeen(sub)
 	return s.persistAddressSnapshot(sub)
 }
 
@@ -398,7 +377,7 @@ func (s *subscriptionService) backfillProgramGap(address string) error {
 	sub = cloneAddressSub(sub)
 	s.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(s.cfg.Connector.RequestTimeoutMs)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultRequestTimeoutMs)*time.Millisecond)
 	defer cancel()
 
 	// 获取当前最新 slot
@@ -469,7 +448,6 @@ func (s *subscriptionService) backfillProgramGap(address string) error {
 				return err
 			}
 		}
-		sub.SeenTxs[sig.Signature] = struct{}{}
 		if sig.Slot > sub.LastObservedSlot {
 			sub.LastObservedSlot = sig.Slot
 			sub.LastObservedTxCode = sig.Signature
@@ -478,7 +456,6 @@ func (s *subscriptionService) backfillProgramGap(address string) error {
 	if latest.BlockNumber > sub.LastObservedSlot {
 		sub.LastObservedSlot = latest.BlockNumber
 	}
-	s.trimSeen(sub)
 	return s.persistAddressSnapshot(sub)
 }
 
@@ -513,14 +490,14 @@ func (s *subscriptionService) transitionTxState(txCode string, newState string, 
 		next.BlockNumber = current.BlockNumber
 	}
 
-	msg := models.TxCallbackMessage{
-		State:         newState,
-		PreviousState: current.State,
-		Tx:            tx,
-		TxEvents:      txEvents,
-	}
-	if err := s.publisher.PublishTx(msg); err != nil {
-		return err
+	if newState == models.TxStateConfirmed {
+		msg := models.TxCallbackMessage{
+			Tx:       tx,
+			TxEvents: txEvents,
+		}
+		if err := s.publisher.PublishTx(msg); err != nil {
+			return err
+		}
 	}
 
 	s.mu.Lock()
@@ -532,10 +509,8 @@ func (s *subscriptionService) transitionTxState(txCode string, newState string, 
 
 	if newState == models.TxStateReverted {
 		if err := s.publisher.PublishRollback(models.TxRollbackMessage{
-			TxCode:        txCode,
-			NetworkCode:   next.NetworkCode,
-			State:         newState,
-			PreviousState: current.State,
+			TxCode:      txCode,
+			NetworkCode: next.NetworkCode,
 		}); err != nil {
 			log.Warningf("publish rollback failed network=%s tx=%s err=%v", next.NetworkCode, txCode, err)
 		}
@@ -549,15 +524,6 @@ func (s *subscriptionService) getTrackedState(txCode string) models.PublishedTxS
 	return s.publishedState[txCode]
 }
 
-func (s *subscriptionService) deleteTrackedState(txCode string) {
-	s.mu.Lock()
-	delete(s.publishedState, txCode)
-	s.mu.Unlock()
-	if err := s.store.DeletePublishedState(context.Background(), txCode); err != nil {
-		log.Warningf("delete tracked tx state failed tx=%s err=%v", txCode, err)
-	}
-}
-
 func (s *subscriptionService) persistAddressSnapshot(sub *models.AddressSubscription) error {
 	clone := cloneAddressSub(sub)
 	if err := s.store.SaveAddressSubscription(context.Background(), clone); err != nil {
@@ -567,18 +533,6 @@ func (s *subscriptionService) persistAddressSnapshot(sub *models.AddressSubscrip
 	s.addressSubs[sub.Address] = cloneAddressSub(sub)
 	s.mu.Unlock()
 	return nil
-}
-
-func (s *subscriptionService) trimSeen(sub *models.AddressSubscription) {
-	if len(sub.SeenTxs) <= s.cfg.Connector.SubscriptionBuffer {
-		return
-	}
-	for key := range sub.SeenTxs {
-		delete(sub.SeenTxs, key)
-		if len(sub.SeenTxs) <= s.cfg.Connector.SubscriptionBuffer {
-			return
-		}
-	}
 }
 
 func (s *subscriptionService) chainNetworkCode() string {
@@ -614,8 +568,8 @@ func (s *subscriptionService) updateTxSubscriptionStatus(txCode string, status s
 	return nil
 }
 
-func (s *subscriptionService) updateAddressSubscriptionStatus(address string, status string, completed bool) error {
-	if err := s.store.UpdateAddressSubscriptionStatus(context.Background(), address, status, completed); err != nil {
+func (s *subscriptionService) updateAddressSubscriptionStatus(address string, status string) error {
+	if err := s.store.UpdateAddressSubscriptionStatus(context.Background(), address, status); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -626,43 +580,16 @@ func (s *subscriptionService) updateAddressSubscriptionStatus(address string, st
 	}
 	if sub, ok := s.addressSubs[address]; ok {
 		sub.SubscriptionStatus = status
-		sub.Completed = completed
 	}
 	delete(s.addressSubs, address)
 	return nil
 }
 
-// cloneAddressSub 的核心作用是把 AddressSubscription 做成“快照”，避免把内存里的同一个对象在多个 goroutine 之间直接共享。
-//
-// 这里必须 clone，主要有两个原因。
-//
-// 第一，AddressSubscription 里有 SeenTxs map[string]struct{}，这是引用类型。
-// 如果只写 copy := *sub 而不深拷贝 SeenTxs，那么副本和原对象其实还会共享同一张 map。后面像 subscription_service.go:358 的 handleProgramNotification、subscription_service.go:398 的 backfillProgramGap 都会在解锁后修改 SeenTxs、
-// LastObservedSlot、LastObservedTxCode。如果共享同一张 map，就很容易出现并发读写和脏数据。
-//
-// 第二，这个服务的锁粒度是“读出来后尽快解锁，再做 RPC 和持久化”。
-// 比如 subscription_service.go:358 里先 RLock 取订阅，再立刻 cloneAddressSub(sub)，然后释放锁，后续才去 QueryTransaction、更新 checkpoint、落库。这样做的目的是：
-//
-// - 不把网络请求放在锁里面，避免阻塞其他订阅
-// - 后续修改的是本地快照，不会直接改坏共享内存
-// - persistAddressSnapshot 再把这个快照写库并替换回内存，见 subscription_service.go:561
-//
-// 所以它不是“多余复制”，而是在当前并发模型里保证这几点：
-//
-// - SeenTxs 不共享引用
-// - 解锁后可以安全修改订阅快照
-// - 落库时写的是一个稳定状态，不是正在被别的 watcher 改动的对象
-//
-// 如果去掉它，最直接的风险就是 SeenTxs 这张 map 产生数据竞争。
 func cloneAddressSub(sub *models.AddressSubscription) *models.AddressSubscription {
 	if sub == nil {
 		return nil
 	}
 	copy := *sub
-	copy.SeenTxs = make(map[string]struct{}, len(sub.SeenTxs))
-	for key := range sub.SeenTxs {
-		copy.SeenTxs[key] = struct{}{}
-	}
 	return &copy
 }
 

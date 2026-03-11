@@ -430,35 +430,9 @@ POST /inner/chain-data-subscribe/{networkCode}/address-subscribe-cancel
 
 }
 
-### 同步指定区块区间
-
-POST /inner/chain-data-subscribe/{networkCode}/block-sync
-
-// RequestBody
-
-{
-
-\"beginBlockNumber\": 5, // 地址，int64
-
-\"endBlockNumber\": 10, // 终止区块高度（闭区间）
-
-}
-
-// ResponseBody
-
-{
-
-\"code\": \"200\",
-
-\"message\": \"\",
-
-\"data\": null
-
-}
-
 # 订阅回调消息体规范
 通过RabbitMQ推送消息
-exchange：tx_callback_fanout_exchange
+
 exchangeType：fanout
 
 
@@ -466,11 +440,9 @@ exchangeType：fanout
 
 无论何种订阅，统一以该格式回调
 
+exchange： tx_callback_fanout_exchange
+
 {
-
-\"state\": \"CONFIRMED\", // CONFIRMED/FINALIZED/DROPPED/REVERTED
-
-\"previousState\": \"\", // 上一状态，首次回调为空
 
 \"tx\": {}, // ChainTx，DROPPED/REVERTED 时可能为空
 
@@ -480,15 +452,13 @@ exchangeType：fanout
 
 ## 交易被区块链撤销回滚的回调
 
+exchange：tx_callback_cancel_fanout_exchange
+
 {
 
 \"txCode\": \"\", // 交易标识
 
 \"networkCode\": \"polygon\", // 网络标识
-
-\"state\": \"REVERTED\", // 固定为 REVERTED
-
-\"previousState\": \"CONFIRMED\" // 回滚前状态
 
 }
 

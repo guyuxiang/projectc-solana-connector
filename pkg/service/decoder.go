@@ -22,35 +22,7 @@ type DomainEvent struct {
 
 type Decoder interface {
 	ProgramID() string
-	Decode(tx *EnrichedTransaction) ([]DomainEvent, error)
-}
-
-type EnrichedTransaction struct {
-	Config       *config.Config
-	NetworkCode  string
-	Signature    string
-	Timestamp    int64
-	Transaction  solana.TransactionResult
-	TokenAccount map[string]tokenAccountContext
-}
-
-func newEnrichedTransaction(cfg *config.Config, networkCode string, tx solana.TransactionResult) *EnrichedTransaction {
-	signature := ""
-	if len(tx.Transaction.Signatures) > 0 {
-		signature = tx.Transaction.Signatures[0]
-	}
-	timestamp := int64(0)
-	if tx.BlockTime != nil {
-		timestamp = *tx.BlockTime * 1000
-	}
-	return &EnrichedTransaction{
-		Config:       cfg,
-		NetworkCode:  networkCode,
-		Signature:    signature,
-		Timestamp:    timestamp,
-		Transaction:  tx,
-		TokenAccount: buildTokenAccountContext(tx),
-	}
+	Decode(cfg *config.Config, network *config.SolanaNetwork, tx solana.TransactionResult, instruction solana.ParsedInstruction) (DomainEvent, error)
 }
 
 type decoderRegistry struct {
@@ -97,40 +69,37 @@ func (d *splTokenDecoder) ProgramID() string {
 	return d.programID
 }
 
-func (d *splTokenDecoder) Decode(tx *EnrichedTransaction) ([]DomainEvent, error) {
-	events := make([]DomainEvent, 0)
-	for _, instruction := range tx.Transaction.Transaction.Message.Instructions {
-		if !strings.EqualFold(instruction.ProgramID, d.programID) &&
-			!(strings.EqualFold(instruction.Program, "spl-token") && d.programID == splTokenProgramID) &&
-			!(strings.EqualFold(instruction.Program, "spl-token-2022") && d.programID == splToken2022ProgramID) {
-			continue
-		}
-		if len(instruction.Parsed) == 0 {
-			continue
-		}
-		var payload parsedInstructionPayload
-		if err := jsonUnmarshalInstruction(instruction, &payload); err != nil {
-			return nil, err
-		}
-		event, ok := d.decodeInstruction(tx, payload)
-		if !ok {
-			continue
-		}
-		events = append(events, event)
+func (d *splTokenDecoder) Decode(cfg *config.Config, network *config.SolanaNetwork, tx solana.TransactionResult, instruction solana.ParsedInstruction) (DomainEvent, error) {
+	if !strings.EqualFold(instruction.ProgramID, d.programID) &&
+		!(strings.EqualFold(instruction.Program, "spl-token") && d.programID == splTokenProgramID) &&
+		!(strings.EqualFold(instruction.Program, "spl-token-2022") && d.programID == splToken2022ProgramID) {
+		return DomainEvent{}, nil
 	}
-	return events, nil
+	if len(instruction.Parsed) == 0 {
+		return DomainEvent{}, nil
+	}
+
+	var payload parsedInstructionPayload
+	if err := jsonUnmarshalInstruction(instruction, &payload); err != nil {
+		return DomainEvent{}, err
+	}
+	event, ok := d.decodeInstruction(cfg, network, tx, payload)
+	if !ok {
+		return DomainEvent{}, nil
+	}
+	return event, nil
 }
 
-func (d *splTokenDecoder) decodeInstruction(tx *EnrichedTransaction, payload parsedInstructionPayload) (DomainEvent, bool) {
+func (d *splTokenDecoder) decodeInstruction(cfg *config.Config, network *config.SolanaNetwork, tx solana.TransactionResult, payload parsedInstructionPayload) (DomainEvent, bool) {
 	switch payload.Type {
 	case "mintTo", "mintToChecked":
 		mint, _ := payload.Info["mint"].(string)
-		tokenCode, ok := resolveTokenCode(tx.Config, tx.NetworkCode, mint)
+		tokenCode, ok := resolveTokenCode(cfg, network, mint)
 		if !ok {
 			return DomainEvent{}, false
 		}
 		account, _ := payload.Info["account"].(string)
-		recipient := resolveTokenAccountOwner(tx.TokenAccount, account)
+		recipient := resolveTokenAccountOwner(tx, account)
 		if recipient == "" {
 			recipient = account
 		}
@@ -140,12 +109,12 @@ func (d *splTokenDecoder) decodeInstruction(tx *EnrichedTransaction, payload par
 				"bid":       readString(payload.Info, "bid"),
 				"tokenCode": tokenCode,
 				"recipient": recipient,
-				"amount":    resolveTokenAmount(tx.Config, tx.NetworkCode, mint, payload.Info),
+				"amount":    resolveTokenAmount(cfg, network, mint, payload.Info),
 			},
 		}, true
 	case "burn", "burnChecked":
 		mint, _ := payload.Info["mint"].(string)
-		tokenCode, ok := resolveTokenCode(tx.Config, tx.NetworkCode, mint)
+		tokenCode, ok := resolveTokenCode(cfg, network, mint)
 		if !ok {
 			return DomainEvent{}, false
 		}
@@ -155,7 +124,7 @@ func (d *splTokenDecoder) decodeInstruction(tx *EnrichedTransaction, payload par
 		}
 		if owner == "" {
 			account, _ := payload.Info["account"].(string)
-			owner = resolveTokenAccountOwner(tx.TokenAccount, account)
+			owner = resolveTokenAccountOwner(tx, account)
 			if owner == "" {
 				owner = account
 			}
@@ -166,7 +135,7 @@ func (d *splTokenDecoder) decodeInstruction(tx *EnrichedTransaction, payload par
 				"bid":       readString(payload.Info, "bid"),
 				"tokenCode": tokenCode,
 				"owner":     owner,
-				"amount":    resolveTokenAmount(tx.Config, tx.NetworkCode, mint, payload.Info),
+				"amount":    resolveTokenAmount(cfg, network, mint, payload.Info),
 			},
 		}, true
 	case "transfer", "transferChecked":
@@ -174,17 +143,17 @@ func (d *splTokenDecoder) decodeInstruction(tx *EnrichedTransaction, payload par
 		source := readString(payload.Info, "source")
 		destination := readString(payload.Info, "destination")
 		if mint == "" {
-			mint = resolveTokenAccountMint(tx.TokenAccount, source)
+			mint = resolveTokenAccountMint(tx, source)
 		}
-		tokenCode, ok := resolveTokenCode(tx.Config, tx.NetworkCode, mint)
+		tokenCode, ok := resolveTokenCode(cfg, network, mint)
 		if !ok {
 			return DomainEvent{}, false
 		}
-		from := resolveTokenAccountOwner(tx.TokenAccount, source)
+		from := resolveTokenAccountOwner(tx, source)
 		if from == "" {
 			from = source
 		}
-		to := resolveTokenAccountOwner(tx.TokenAccount, destination)
+		to := resolveTokenAccountOwner(tx, destination)
 		if to == "" {
 			to = destination
 		}
@@ -194,7 +163,7 @@ func (d *splTokenDecoder) decodeInstruction(tx *EnrichedTransaction, payload par
 				"tokenCode": tokenCode,
 				"from":      from,
 				"to":        to,
-				"amount":    resolveTokenAmount(tx.Config, tx.NetworkCode, mint, payload.Info),
+				"amount":    resolveTokenAmount(cfg, network, mint, payload.Info),
 			},
 		}, true
 	default:
@@ -209,7 +178,7 @@ func jsonUnmarshalInstruction(instruction solana.ParsedInstruction, out interfac
 	return json.Unmarshal(instruction.Parsed, out)
 }
 
-func resolveTokenCode(cfg *config.Config, networkCode string, mint string) (string, bool) {
+func resolveTokenCode(cfg *config.Config, network *config.SolanaNetwork, mint string) (string, bool) {
 	if mint == "" || cfg == nil {
 		return "", false
 	}
@@ -217,14 +186,14 @@ func resolveTokenCode(cfg *config.Config, networkCode string, mint string) (stri
 		if token == nil {
 			continue
 		}
-		if token.NetworkCode == networkCode && strings.EqualFold(token.MintAddress, mint) {
+		if network != nil && token.NetworkCode == network.Code && strings.EqualFold(token.MintAddress, mint) {
 			return tokenCode, true
 		}
 	}
 	return "", false
 }
 
-func resolveTokenAmount(cfg *config.Config, networkCode string, mint string, info map[string]interface{}) float64 {
+func resolveTokenAmount(cfg *config.Config, network *config.SolanaNetwork, mint string, info map[string]interface{}) float64 {
 	if tokenAmount, ok := info["tokenAmount"].(map[string]interface{}); ok {
 		if uiAmountString, ok := tokenAmount["uiAmountString"].(string); ok && uiAmountString != "" {
 			value, err := strconv.ParseFloat(uiAmountString, 64)
@@ -251,7 +220,7 @@ func resolveTokenAmount(cfg *config.Config, networkCode string, mint string, inf
 			if token == nil {
 				continue
 			}
-			if token.NetworkCode == networkCode && strings.EqualFold(token.MintAddress, mint) {
+			if network != nil && token.NetworkCode == network.Code && strings.EqualFold(token.MintAddress, mint) {
 				decimals = token.Decimals
 				break
 			}

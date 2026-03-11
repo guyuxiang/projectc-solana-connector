@@ -34,17 +34,17 @@ type ChainService interface {
 }
 
 func NewChainService(cfg *config.Config) ChainService {
-	timeout := time.Duration(cfg.Connector.RequestTimeoutMs) * time.Millisecond
-	backoff := time.Duration(cfg.Connector.RetryBackoffMs) * time.Millisecond
+	timeout := time.Duration(defaultRequestTimeoutMs) * time.Millisecond
+	backoff := time.Duration(defaultRetryBackoffMs) * time.Millisecond
 	clients := make(map[string]*solana.Client, len(cfg.Networks))
 	wsClients := make(map[string]*solana.WSClient, len(cfg.Networks))
 	for code, network := range cfg.Networks {
-		clients[code] = solana.NewClient(network.Endpoints, timeout, cfg.Connector.RetryTimes, backoff, cfg.Connector.Commitment)
+		clients[code] = solana.NewClient(network.Endpoints, timeout, defaultRetryTimes, backoff, defaultRPCCommitment)
 		wsEndpoints := network.WsEndpoints
 		if len(wsEndpoints) == 0 {
 			wsEndpoints = solana.DeriveWSEndpoints(network.Endpoints)
 		}
-		idleTimeout := time.Duration(cfg.Connector.WsIdleTimeoutMs) * time.Millisecond
+		idleTimeout := time.Duration(defaultWSIdleTimeoutMs) * time.Millisecond
 		wsClients[code] = solana.NewWSClient(wsEndpoints, timeout, idleTimeout)
 	}
 	return &chainService{
@@ -52,7 +52,7 @@ func NewChainService(cfg *config.Config) ChainService {
 		clients:          clients,
 		wsClients:        wsClients,
 		network:          mustResolveSingleNetwork(cfg),
-		idempotencyStore: newIdempotencyStore(time.Duration(cfg.Connector.IdempotencyTtlSec) * time.Second),
+		idempotencyStore: newIdempotencyStore(time.Duration(defaultIdempotencyTTLSeconds) * time.Second),
 	}
 }
 
@@ -87,7 +87,7 @@ func (s *chainService) SendSignedTransaction(ctx context.Context, txSignResult s
 			"encoding":            encoding,
 			"preflightCommitment": client.Commitment(),
 			"skipPreflight":       false,
-			"maxRetries":          s.cfg.Connector.RetryTimes,
+			"maxRetries":          defaultRetryTimes,
 			"minContextSlot":      nil,
 		},
 	}
@@ -312,8 +312,8 @@ func (s *chainService) GetTransactionReceipt(ctx context.Context, txCode string)
 		return nil, nil, false, err
 	}
 
-	tx := toChainTx(network.Code, network, result)
-	events := toChainEvents(s.cfg, network.Code, result)
+	tx := toChainTx(network, result)
+	events := toChainEvents(s.cfg, network, result)
 	return &tx, events, true, nil
 }
 
@@ -373,8 +373,8 @@ func (s *chainService) FetchBlockTransactions(ctx context.Context, slot uint64) 
 	clientNetwork := s.network
 	messages := make([]models.TxCallbackMessage, 0, len(result.Transactions))
 	for _, tx := range result.Transactions {
-		chainTx := toChainTx(clientNetwork.Code, clientNetwork, tx)
-		events := toChainEvents(s.cfg, clientNetwork.Code, tx)
+		chainTx := toChainTx(clientNetwork, tx)
+		events := toChainEvents(s.cfg, clientNetwork, tx)
 		messages = append(messages, models.TxCallbackMessage{
 			Tx:       &chainTx,
 			TxEvents: events,

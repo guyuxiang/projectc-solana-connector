@@ -2,9 +2,7 @@ package store
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
-	"strings"
 	"time"
 
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
@@ -19,13 +17,12 @@ type SubscriptionStore interface {
 	SaveTxSubscription(ctx context.Context, sub *models.TxSubscription) error
 	UpdateTxSubscriptionStatus(ctx context.Context, txCode string, status string, completed bool) error
 	SaveAddressSubscription(ctx context.Context, sub *models.AddressSubscription) error
-	UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string, completed bool) error
+	UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string) error
 	SavePublishedState(ctx context.Context, txCode string, state models.PublishedTxState) error
-	DeletePublishedState(ctx context.Context, txCode string) error
 }
 
 func NewSubscriptionStore(cfg *config.Config) (SubscriptionStore, error) {
-	return newMySQLSubscriptionStore(cfg.Connector.SubscriptionStore.MySQL)
+	return newMySQLSubscriptionStore(cfg.MySQL)
 }
 
 type mySQLSubscriptionStore struct {
@@ -50,8 +47,6 @@ type addressSubscriptionModel struct {
 	LastObservedSlot   uint64    `gorm:"column:last_observed_slot;not null"`
 	LastObservedTxCode string    `gorm:"column:last_observed_tx_code;size:128;not null"`
 	SubscriptionStatus string    `gorm:"column:subscription_status;size:32;not null"`
-	Completed          bool      `gorm:"column:completed;not null"`
-	SeenTxsJSON        string    `gorm:"column:seen_txs_json;type:mediumtext;not null"`
 	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt          time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
@@ -71,7 +66,7 @@ func (publishedStateModel) TableName() string { return "connector_published_stat
 
 func newMySQLSubscriptionStore(cfg *config.MySQLConfig) (SubscriptionStore, error) {
 	if cfg == nil || cfg.DSN == "" {
-		return nil, errors.New("subscriptionStore.mysql.dsn is required")
+		return nil, errors.New("mysql.dsn is required")
 	}
 
 	db, err := gorm.Open(mysql.Open(cfg.DSN), &gorm.Config{})
@@ -143,14 +138,18 @@ func (s *mySQLSubscriptionStore) Load(ctx context.Context) (*models.Subscription
 			LastObservedSlot:   row.LastObservedSlot,
 			LastObservedTxCode: row.LastObservedTxCode,
 			SubscriptionStatus: status,
-			Completed:          row.Completed,
-			SeenTxs:            decodeSeenTxs(row.SeenTxsJSON),
 		}
 		snapshot.AddressSubs[sub.Address] = sub
 	}
 
 	var publishedRows []publishedStateModel
-	if err := s.db.WithContext(ctx).Find(&publishedRows).Error; err != nil {
+	if err := s.db.WithContext(ctx).
+		Where("state NOT IN ?", []string{
+			models.TxStateFinalized,
+			models.TxStateDropped,
+			models.TxStateReverted,
+		}).
+		Find(&publishedRows).Error; err != nil {
 		return nil, err
 	}
 	for _, row := range publishedRows {
@@ -192,34 +191,27 @@ func (s *mySQLSubscriptionStore) UpdateTxSubscriptionStatus(ctx context.Context,
 }
 
 func (s *mySQLSubscriptionStore) SaveAddressSubscription(ctx context.Context, sub *models.AddressSubscription) error {
-	seenTxsJSON, err := encodeSeenTxs(sub.SeenTxs)
-	if err != nil {
-		return err
-	}
 	model := addressSubscriptionModel{
 		Address:            sub.Address,
 		NetworkCode:        sub.NetworkCode,
 		LastObservedSlot:   sub.LastObservedSlot,
 		LastObservedTxCode: sub.LastObservedTxCode,
 		SubscriptionStatus: sub.SubscriptionStatus,
-		Completed:          sub.Completed,
-		SeenTxsJSON:        seenTxsJSON,
 		CreatedAt:          sub.CreatedAt,
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "address"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"network_code", "last_observed_slot", "last_observed_tx_code", "subscription_status", "completed", "seen_txs_json", "updated_at",
+			"network_code", "last_observed_slot", "last_observed_tx_code", "subscription_status", "updated_at",
 		}),
 	}).Create(&model).Error
 }
 
-func (s *mySQLSubscriptionStore) UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string, completed bool) error {
+func (s *mySQLSubscriptionStore) UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string) error {
 	return s.db.WithContext(ctx).Model(&addressSubscriptionModel{}).
 		Where("address = ?", address).
 		Updates(map[string]interface{}{
 			"subscription_status": status,
-			"completed":           completed,
 			"updated_at":          time.Now(),
 		}).Error
 }
@@ -238,35 +230,4 @@ func (s *mySQLSubscriptionStore) SavePublishedState(ctx context.Context, txCode 
 			"network_code", "block_number", "state", "updated_at",
 		}),
 	}).Create(&model).Error
-}
-
-func (s *mySQLSubscriptionStore) DeletePublishedState(ctx context.Context, txCode string) error {
-	return s.db.WithContext(ctx).Delete(&publishedStateModel{}, "tx_code = ?", txCode).Error
-}
-
-func encodeSeenTxs(seen map[string]struct{}) (string, error) {
-	keys := make([]string, 0, len(seen))
-	for key := range seen {
-		keys = append(keys, key)
-	}
-	payload, err := json.Marshal(keys)
-	if err != nil {
-		return "", err
-	}
-	return string(payload), nil
-}
-
-func decodeSeenTxs(raw string) map[string]struct{} {
-	out := make(map[string]struct{})
-	if strings.TrimSpace(raw) == "" {
-		return out
-	}
-	var keys []string
-	if err := json.Unmarshal([]byte(raw), &keys); err != nil {
-		return out
-	}
-	for _, key := range keys {
-		out[key] = struct{}{}
-	}
-	return out
 }

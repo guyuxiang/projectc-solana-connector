@@ -1,0 +1,46 @@
+server:
+  host: "0.0.0.0"
+  port: 80
+  version: "0.1.0"
+gin:
+  mode: release
+log:
+  level: info
+auth:
+  username: "test"
+  password: "test"
+mysql:
+  username: "root"
+  password: "123456"
+  host: "mysql01.dev.lls.com"
+  port: 4120
+  database: "projectc-solana-connector"
+  maxOpenconns: 200
+  maxIdleConns: 200
+  connMaxLifeSec: 300
+mq:
+  mode: "log"
+  host: "dev-mq.lls.com"
+  port: 5672
+  username: "projectc"
+  password: "projectc"
+  virtual-host: "/projectc-dtt"
+connector:
+  pollIntervalMs: 15000
+  txSubscribeWindow: 180
+networks:
+  solana:
+    code: "solana"
+    chainId: "devnet"
+    nativeSymbol: "SOL"
+    lamportsPerToken: 1000000000
+    endpoints:
+      - "https://api.devnet.solana.com"
+    wsEndpoints:
+      - "wss://api.devnet.solana.com"
+    faucet:
+      enabled: false
+      privateKeyBase58: ""
+      fromAddress: ""
+      computeUnitPrice: 0
+tokens: {}

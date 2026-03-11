@@ -134,12 +134,6 @@ program 订阅在每次启动 watcher 和每次重连前都会做一次 gap back
 
 - `connector.pollIntervalMs`
   定时补拉周期
-- `connector.wsIdleTimeoutMs`
-  WebSocket `pong` 超时时间
-- `connector.retryBackoffMs`
-  watcher 重连退避
-- `connector.commitment`
-  HTTP/RPC 查询使用的 commitment
 - `networks.solana.endpoints`
   Solana HTTP RPC 地址
 - `networks.solana.wsEndpoints`

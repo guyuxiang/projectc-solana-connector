@@ -4,6 +4,7 @@ import (
 	"sync"
 
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
+	"github.com/guyuxiang/projectc-solana-connector/pkg/mq"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/store"
 )
 
@@ -20,7 +21,7 @@ type App struct {
 func GetApp() *App {
 	appOnce.Do(func() {
 		cfg := config.GetConfig()
-		publisher := NewCallbackPublisher(cfg)
+		publisher := mq.NewCallbackPublisher(cfg)
 		chain := NewChainService(cfg)
 		subscriptionStore, err := store.NewSubscriptionStore(cfg)
 		if err != nil {

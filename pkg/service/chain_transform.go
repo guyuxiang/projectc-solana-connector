@@ -16,7 +16,7 @@ type parsedInstructionPayload struct {
 	Info map[string]interface{} `json:"info"`
 }
 
-func toChainTx(networkCode string, network *config.SolanaNetwork, tx solana.TransactionResult) models.ChainTx {
+func toChainTx(network *config.SolanaNetwork, tx solana.TransactionResult) models.ChainTx {
 	signature := ""
 	if len(tx.Transaction.Signatures) > 0 {
 		signature = tx.Transaction.Signatures[0]
@@ -33,7 +33,7 @@ func toChainTx(networkCode string, network *config.SolanaNetwork, tx solana.Tran
 
 	return models.ChainTx{
 		Code:        signature,
-		NetworkCode: networkCode,
+		NetworkCode: network.Code,
 		BlockNumber: tx.Slot,
 		Timestamp:   timestamp,
 		Status:      status,
@@ -44,73 +44,36 @@ func toChainTx(networkCode string, network *config.SolanaNetwork, tx solana.Tran
 	}
 }
 
-func toChainEvents(cfg *config.Config, networkCode string, tx solana.TransactionResult) []models.ChainEvent {
-	enriched := newEnrichedTransaction(cfg, networkCode, tx)
+func toChainEvents(cfg *config.Config, network *config.SolanaNetwork, tx solana.TransactionResult) []models.ChainEvent {
 	events := make([]models.ChainEvent, 0, len(tx.Transaction.Message.Instructions))
 	eventIdx := 0
-	decodedPrograms := make(map[string]struct{})
+	signature := ""
+	if len(tx.Transaction.Signatures) > 0 {
+		signature = tx.Transaction.Signatures[0]
+	}
+	timestamp := int64(0)
+	if tx.BlockTime != nil {
+		timestamp = *tx.BlockTime * 1000
+	}
 
-	for idx, instruction := range tx.Transaction.Message.Instructions {
-		decoderKey := instruction.ProgramID
-		if decoderKey == "" {
-			decoderKey = instruction.Program
-		}
+	for _, instruction := range tx.Transaction.Message.Instructions {
 		if decoder := defaultDecoderRegistry.get(instruction.ProgramID, instruction.Program); decoder != nil {
-			if _, seen := decodedPrograms[decoderKey]; !seen {
-				domainEvents, err := decoder.Decode(enriched)
-				if err == nil {
-					for _, domainEvent := range domainEvents {
-						events = append(events, models.ChainEvent{
-							Code:        fmt.Sprintf("%s#%d", enriched.Signature, eventIdx),
-							NetworkCode: networkCode,
-							BlockNumber: tx.Slot,
-							Timestamp:   enriched.Timestamp,
-							Type:        domainEvent.Type,
-							Data:        domainEvent.Data,
-						})
-						eventIdx++
-					}
-				}
-				decodedPrograms[decoderKey] = struct{}{}
+			domainEvent, err := decoder.Decode(cfg, network, tx, instruction)
+			if err == nil && domainEvent.Type != "" {
+				events = append(events, models.ChainEvent{
+					Code:        fmt.Sprintf("%s#%d", signature, eventIdx),
+					NetworkCode: network.Code,
+					BlockNumber: tx.Slot,
+					Timestamp:   timestamp,
+					Type:        domainEvent.Type,
+					Data:        domainEvent.Data,
+				})
+				eventIdx++
 			}
 			continue
 		}
-
-		payload, eventType, ok := normalizeInstructionEvent(instruction)
-		if !ok {
-			continue
-		}
-		events = append(events, models.ChainEvent{
-			Code:        fmt.Sprintf("%s#%d", enriched.Signature, idx+eventIdx),
-			NetworkCode: networkCode,
-			BlockNumber: tx.Slot,
-			Timestamp:   enriched.Timestamp,
-			Type:        eventType,
-			Data:        payload,
-		})
 	}
 	return events
-}
-
-func normalizeInstructionEvent(instruction solana.ParsedInstruction) (map[string]interface{}, string, bool) {
-	if len(instruction.Parsed) == 0 {
-		return nil, "", false
-	}
-
-	var payload parsedInstructionPayload
-	if err := json.Unmarshal(instruction.Parsed, &payload); err != nil {
-		return nil, "", false
-	}
-	if payload.Type == "" {
-		return nil, "", false
-	}
-
-	eventType := strings.ToUpper(instruction.Program) + "_" + strings.ToUpper(payload.Type)
-	return map[string]interface{}{
-		"program": instruction.Program,
-		"type":    payload.Type,
-		"info":    payload.Info,
-	}, eventType, true
 }
 
 func extractChainTxParties(tx solana.TransactionResult, network *config.SolanaNetwork) (string, string, string) {
@@ -163,40 +126,46 @@ type tokenAccountContext struct {
 	Owner string
 }
 
-func buildTokenAccountContext(tx solana.TransactionResult) map[string]tokenAccountContext {
-	out := make(map[string]tokenAccountContext)
-	for _, record := range tx.Meta.PreTokenBalances {
-		applyTokenBalanceRecord(out, tx, record)
+func resolveTokenAccountContext(tx solana.TransactionResult, account string) (tokenAccountContext, bool) {
+	if account == "" {
+		return tokenAccountContext{}, false
 	}
 	for _, record := range tx.Meta.PostTokenBalances {
-		applyTokenBalanceRecord(out, tx, record)
+		if ctx, ok := resolveTokenAccountContextFromRecord(tx, account, record); ok {
+			return ctx, true
+		}
 	}
-	return out
+	for _, record := range tx.Meta.PreTokenBalances {
+		if ctx, ok := resolveTokenAccountContextFromRecord(tx, account, record); ok {
+			return ctx, true
+		}
+	}
+	return tokenAccountContext{}, false
 }
 
-func applyTokenBalanceRecord(out map[string]tokenAccountContext, tx solana.TransactionResult, record solana.TokenBalanceRecord) {
+func resolveTokenAccountContextFromRecord(tx solana.TransactionResult, account string, record solana.TokenBalanceRecord) (tokenAccountContext, bool) {
 	if int(record.AccountIndex) >= len(tx.Transaction.Message.AccountKeys) {
-		return
+		return tokenAccountContext{}, false
 	}
-	account := tx.Transaction.Message.AccountKeys[record.AccountIndex].Pubkey
-	if account == "" {
-		return
+	pubkey := tx.Transaction.Message.AccountKeys[record.AccountIndex].Pubkey
+	if pubkey == "" || !strings.EqualFold(pubkey, account) {
+		return tokenAccountContext{}, false
 	}
-	out[account] = tokenAccountContext{
+	return tokenAccountContext{
 		Mint:  record.Mint,
 		Owner: record.Owner,
-	}
+	}, true
 }
 
-func resolveTokenAccountOwner(ctx map[string]tokenAccountContext, account string) string {
-	if item, ok := ctx[account]; ok {
+func resolveTokenAccountOwner(tx solana.TransactionResult, account string) string {
+	if item, ok := resolveTokenAccountContext(tx, account); ok {
 		return item.Owner
 	}
 	return ""
 }
 
-func resolveTokenAccountMint(ctx map[string]tokenAccountContext, account string) string {
-	if item, ok := ctx[account]; ok {
+func resolveTokenAccountMint(tx solana.TransactionResult, account string) string {
+	if item, ok := resolveTokenAccountContext(tx, account); ok {
 		return item.Mint
 	}
 	return ""

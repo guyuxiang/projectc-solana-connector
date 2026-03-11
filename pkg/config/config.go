@@ -94,86 +94,50 @@ func normalizeConfig(c *Config) {
 	if c.Log == nil {
 		c.Log = &Log{}
 	}
+	if c.MySQL == nil {
+		c.MySQL = &MySQLConfig{}
+	}
+	if c.MQ == nil {
+		c.MQ = &MQConfig{}
+	}
 	if c.Connector == nil {
 		c.Connector = &Connector{}
 	}
-	if c.Connector.RequestTimeoutMs == 0 {
-		c.Connector.RequestTimeoutMs = 5000
-	}
-	if c.Connector.RetryTimes == 0 {
-		c.Connector.RetryTimes = 2
-	}
-	if c.Connector.RetryBackoffMs == 0 {
-		c.Connector.RetryBackoffMs = 300
-	}
-	if c.Connector.Commitment == "" {
-		c.Connector.Commitment = "confirmed"
-	}
 	if c.Connector.PollIntervalMs == 0 {
-		c.Connector.PollIntervalMs = 5000
-	}
-	if c.Connector.ReorgDepth == 0 {
-		c.Connector.ReorgDepth = 32
+		c.Connector.PollIntervalMs = 15000
 	}
 	if c.Connector.TxSubscribeWindow == 0 {
 		c.Connector.TxSubscribeWindow = 300
 	}
-	if c.Connector.IdempotencyTtlSec == 0 {
-		c.Connector.IdempotencyTtlSec = 3600
+	if c.MQ.Mode == "" {
+		c.MQ.Mode = "log"
 	}
-	if c.Connector.SubscriptionBuffer == 0 {
-		c.Connector.SubscriptionBuffer = 1024
+	if c.MQ.VirtualHost == "" && c.MQ.VirtualHostLegacy != "" {
+		c.MQ.VirtualHost = c.MQ.VirtualHostLegacy
 	}
-	if c.Connector.Callback == nil {
-		c.Connector.Callback = &CallbackConfig{}
+	if c.MQ.URL == "" && c.MQ.Host != "" {
+		c.MQ.URL = buildAMQPURL(c.MQ)
 	}
-	if c.Connector.SubscriptionStore == nil {
-		c.Connector.SubscriptionStore = &SubscriptionStoreConfig{}
+	if c.MySQL.MaxOpenConns == 0 {
+		c.MySQL.MaxOpenConns = c.MySQL.MaxOpenConnsV2
 	}
-	if c.Connector.Callback.Mode == "" {
-		c.Connector.Callback.Mode = "log"
+	if c.MySQL.MaxOpenConns == 0 {
+		c.MySQL.MaxOpenConns = 10
 	}
-	if c.Connector.Callback.Exchange == "" {
-		c.Connector.Callback.Exchange = "tx_callback_fanout_exchange"
+	if c.MySQL.MaxIdleConns == 0 {
+		c.MySQL.MaxIdleConns = 5
 	}
-	if c.Connector.Callback.ExchangeType == "" {
-		c.Connector.Callback.ExchangeType = "fanout"
+	if c.MySQL.ConnMaxLifeSec == 0 {
+		c.MySQL.ConnMaxLifeSec = 300
 	}
-	if c.Connector.Callback.ReconnectIntervalMs == 0 {
-		c.Connector.Callback.ReconnectIntervalMs = 3000
-	}
-	if c.Connector.Callback.VirtualHost == "" && c.Connector.Callback.VirtualHostLegacy != "" {
-		c.Connector.Callback.VirtualHost = c.Connector.Callback.VirtualHostLegacy
-	}
-	if c.Connector.Callback.URL == "" && c.Connector.Callback.Host != "" {
-		c.Connector.Callback.URL = buildAMQPURL(c.Connector.Callback)
-	}
-	if c.Connector.SubscriptionStore.MySQL == nil {
-		c.Connector.SubscriptionStore.MySQL = &MySQLConfig{}
-	}
-	if c.Connector.SubscriptionStore.MySQL.MaxOpenConns == 0 {
-		c.Connector.SubscriptionStore.MySQL.MaxOpenConns = c.Connector.SubscriptionStore.MySQL.MaxOpenConnsV2
-	}
-	if c.Connector.SubscriptionStore.MySQL.MaxOpenConns == 0 {
-		c.Connector.SubscriptionStore.MySQL.MaxOpenConns = 10
-	}
-	if c.Connector.SubscriptionStore.MySQL.MaxIdleConns == 0 {
-		c.Connector.SubscriptionStore.MySQL.MaxIdleConns = 5
-	}
-	if c.Connector.SubscriptionStore.MySQL.ConnMaxLifeSec == 0 {
-		c.Connector.SubscriptionStore.MySQL.ConnMaxLifeSec = 300
-	}
-	if c.Connector.SubscriptionStore.MySQL.DSN == "" && c.Connector.SubscriptionStore.MySQL.Host != "" {
-		c.Connector.SubscriptionStore.MySQL.DSN = buildMySQLDSN(c.Connector.SubscriptionStore.MySQL)
+	if c.MySQL.DSN == "" && c.MySQL.Host != "" {
+		c.MySQL.DSN = buildMySQLDSN(c.MySQL)
 	}
 	if c.Networks == nil {
 		c.Networks = make(map[string]*SolanaNetwork)
 	}
 	if c.Tokens == nil {
 		c.Tokens = make(map[string]*Token)
-	}
-	if c.ContractInfo == nil {
-		c.ContractInfo = make(map[string]*ContractBundle)
 	}
 	for code, network := range c.Networks {
 		if network == nil {
@@ -188,13 +152,10 @@ func normalizeConfig(c *Config) {
 		if network.LamportsPerToken == 0 {
 			network.LamportsPerToken = 1_000_000_000
 		}
-		if network.Contracts == nil {
-			network.Contracts = make(map[string]string)
-		}
 	}
 }
 
-func buildAMQPURL(cfg *CallbackConfig) string {
+func buildAMQPURL(cfg *MQConfig) string {
 	host := cfg.Host
 	port := cfg.Port
 	if port == 0 {

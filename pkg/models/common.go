@@ -113,23 +113,14 @@ type AddressSubscribeCancelRequest struct {
 	Address string `json:"address" binding:"required"`
 }
 
-type BlockSyncRequest struct {
-	BeginBlockNumber uint64 `json:"beginBlockNumber" binding:"required"`
-	EndBlockNumber   uint64 `json:"endBlockNumber" binding:"required"`
-}
-
 type TxCallbackMessage struct {
-	State         string       `json:"state"`
-	PreviousState string       `json:"previousState,omitempty"`
-	Tx            *ChainTx     `json:"tx,omitempty"`
-	TxEvents      []ChainEvent `json:"txEvents,omitempty"`
+	Tx       *ChainTx     `json:"tx,omitempty"`
+	TxEvents []ChainEvent `json:"txEvents,omitempty"`
 }
 
 type TxRollbackMessage struct {
-	TxCode        string `json:"txCode"`
-	NetworkCode   string `json:"networkCode"`
-	State         string `json:"state"`
-	PreviousState string `json:"previousState,omitempty"`
+	TxCode      string `json:"txCode"`
+	NetworkCode string `json:"networkCode"`
 }
 
 const (
@@ -156,14 +147,12 @@ type TxSubscription struct {
 }
 
 type AddressSubscription struct {
-	CreatedAt          time.Time           `json:"created_at"`
-	NetworkCode        string              `json:"networkCode"`
-	Address            string              `json:"address"`
-	LastObservedSlot   uint64              `json:"lastObservedSlot"`
-	LastObservedTxCode string              `json:"lastObservedTxCode"`
-	SubscriptionStatus string              `json:"subscriptionStatus"`
-	Completed          bool                `json:"completed"`
-	SeenTxs            map[string]struct{} `json:"seenTxs"`
+	CreatedAt          time.Time `json:"created_at"`
+	NetworkCode        string    `json:"networkCode"`
+	Address            string    `json:"address"`
+	LastObservedSlot   uint64    `json:"lastObservedSlot"`
+	LastObservedTxCode string    `json:"lastObservedTxCode"`
+	SubscriptionStatus string    `json:"subscriptionStatus"`
 }
 
 type PublishedTxState struct {
