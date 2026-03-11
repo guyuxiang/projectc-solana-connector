@@ -2,7 +2,7 @@ package service
 
 const (
 	defaultRPCCommitment         = "confirmed"
-	defaultRequestTimeoutMs      = 5000
+	defaultRequestTimeoutMs      = 15000
 	defaultRetryTimes            = 2
 	defaultRetryBackoffMs        = 300
 	defaultWSIdleTimeoutMs       = 90000

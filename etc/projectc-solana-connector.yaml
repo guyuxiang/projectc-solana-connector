@@ -5,7 +5,7 @@ server:
 gin:
   mode: release
 log:
-  level: info
+  level: debug
 auth:
   username: "test"
   password: "test"
@@ -35,12 +35,17 @@ networks:
     nativeSymbol: "SOL"
     lamportsPerToken: 1000000000
     endpoints:
-      - "https://api.devnet.solana.com"
+      - "https://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
     wsEndpoints:
-      - "wss://api.devnet.solana.com"
+      - "wss://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
     faucet:
-      enabled: false
-      privateKeyBase58: ""
-      fromAddress: ""
+      enabled: true
+      privateKeyBase58: "4AsJzD7QudESXRagiwXrSPwqRoj1PJtjVG8Pcgeq5RYCibsLtGyF4Aeq39AexhMvu84ePNtjMvknqnAvA31tBQ2d"
+      fromAddress: "9cd7T7sCuDGftuByPs9hAHiSWUXHnLvGpY56Yn9pWyFP"
       computeUnitPrice: 0
-tokens: {}
+tokens:
+  USDC:
+    code: "USDC"
+    networkCode: "solana"
+    mintAddress: "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU"
+    decimals: 6
