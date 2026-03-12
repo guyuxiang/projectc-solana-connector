@@ -42,7 +42,7 @@ download:
 .PHONY: src.build
 src.build:
 	$(MKDIR_P) $(BUILD_FOLDER)/pkg/cmd/projectc-solana-connector/
-	GO111MODULE=on $(GO) build -mod=vendor -v -o $(BUILD_FOLDER)/pkg/cmd/projectc-solana-connector/projectc-solana-connector \
+	GO111MODULE=on $(GO) build -mod=mod -v -o $(BUILD_FOLDER)/pkg/cmd/projectc-solana-connector/projectc-solana-connector \
 	./cmd/...
 
 ## dockerfiles/ ########################################

@@ -1,5 +1,5 @@
 # Building stage
-FROM golang:1.11-alpine3.9
+FROM docker.m.daocloud.io/golang:1.24
 
 RUN apk add --update make
 
@@ -27,6 +27,6 @@ COPY --from=0 /go/bin /go/bin
 
 COPY etc/projectc-solana-connector.yaml /etc/projectc-solana-connector/projectc-solana-connector.yaml
 
-EXPOSE 8081
+EXPOSE 80
 
 ENTRYPOINT ["./projectc-solana-connector"]
