@@ -78,7 +78,6 @@ type FaucetConfig struct {
 }
 
 type Token struct {
-	Code        string `yaml:"code"`
 	NetworkCode string `yaml:"networkCode"`
 	MintAddress string `yaml:"mintAddress"`
 	Decimals    uint8  `yaml:"decimals"`

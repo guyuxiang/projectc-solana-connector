@@ -106,7 +106,7 @@ func (s *subscriptionService) RegisterAddressSubscription(req models.AddressSubs
 }
 
 func (s *subscriptionService) CancelTxSubscription(txCode string) error {
-	return s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusCancelled, true)
+	return s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusCancelled)
 }
 
 func (s *subscriptionService) CancelAddressSubscription(address string) error {
@@ -170,7 +170,8 @@ func (s *subscriptionService) pollTxSubscriptions(ctx context.Context, latestBlo
 	s.mu.RUnlock()
 
 	for _, sub := range subs {
-		if err := s.advanceTxState(ctx, sub.TxCode, sub.EndBlockNumber, true, latestBlock); err != nil {
+		log.Infof("advanceTxSubscriptionState tx=%s", sub.TxCode)
+		if err := s.advanceTxSubscriptionState(ctx, sub.TxCode, sub.EndBlockNumber, latestBlock); err != nil {
 			log.Warningf("advance tx subscription failed network=%s tx=%s err=%v", sub.NetworkCode, sub.TxCode, err)
 		}
 	}
@@ -188,58 +189,88 @@ func (s *subscriptionService) pollTrackedTransactions(ctx context.Context, lates
 		if isTerminalTxState(state.State) {
 			continue
 		}
-		if err := s.advanceTxState(ctx, txCode, 0, false, latestBlock); err != nil {
+		if err := s.advanceTrackedTxState(ctx, txCode, state, latestBlock); err != nil {
 			log.Warningf("advance tracked tx failed network=%s tx=%s err=%v", state.NetworkCode, txCode, err)
 		}
 	}
 }
 
-func (s *subscriptionService) advanceTxState(ctx context.Context, txCode string, endBlock uint64, allowDrop bool, latestBlock uint64) error {
+func (s *subscriptionService) advanceTxSubscriptionState(ctx context.Context, txCode string, endBlock uint64, latestBlock uint64) error {
 	status, err := s.chain.GetSignatureStatus(ctx, txCode)
 	if err != nil {
 		return err
 	}
-	current := s.getTrackedState(txCode)
-
 	if status.Exists {
-		target := mapSignatureStatusToState(status)
-		var tx *models.ChainTx
-		var txEvents []models.ChainEvent
-		resp, err := s.chain.QueryTransaction(ctx, txCode)
-		if err != nil {
-			return err
-		}
-		if resp != nil && resp.Tx != nil {
-			tx = resp.Tx
-			txEvents = resp.TxEvents
+
+		target := ""
+		switch status.ConfirmationStatus {
+		case "finalized":
+			target = models.TxStateFinalized
+		case "confirmed":
+			target = models.TxStateConfirmed
+		default:
+			return nil
 		}
 
-		for _, state := range txTransitionPath(current.State, target) {
-			if err := s.transitionTxState(txCode, state, tx, txEvents, status.Slot); err != nil {
+		current := s.getTrackedState(txCode)
+		if target != "" && txStateRank(target) > txStateRank(current.State) {
+			var tx *models.ChainTx
+			var txEvents []models.ChainEvent
+			resp, err := s.chain.QueryTransaction(ctx, txCode)
+			if err != nil {
+				return err
+			}
+			if resp != nil && resp.Tx != nil {
+				tx = resp.Tx
+				txEvents = resp.TxEvents
+			}
+
+			if current.State == "" && target == models.TxStateFinalized {
+				if err := s.transitionTxState(txCode, models.TxStateConfirmed, tx, txEvents, status.Slot); err != nil {
+					return err
+				}
+			}
+			if err := s.transitionTxState(txCode, target, tx, txEvents, status.Slot); err != nil {
 				return err
 			}
 		}
 
 		if target == models.TxStateFinalized {
-			return s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusCompleted, true)
+			return s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusCompleted)
 		}
 		return nil
 	}
 
-	if current.State != "" && !isTerminalTxState(current.State) {
-		if err := s.transitionTxState(txCode, models.TxStateReverted, nil, nil, maxUint64(current.BlockNumber, latestBlock)); err != nil {
-			return err
-		}
-		_ = s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusCompleted, true)
-		return nil
-	}
-
-	if allowDrop && latestBlock > endBlock {
+	if latestBlock > endBlock {
 		if err := s.transitionTxState(txCode, models.TxStateDropped, nil, nil, latestBlock); err != nil {
 			return err
 		}
-		return s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusExpired, true)
+		return s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusExpired)
 	}
+	return nil
+}
+
+func (s *subscriptionService) advanceTrackedTxState(ctx context.Context, txCode string, current models.PublishedTxState, latestBlock uint64) error {
+	status, err := s.chain.GetSignatureStatus(ctx, txCode)
+	if err != nil {
+		return err
+	}
+	if status.Exists {
+		if current.State == models.TxStateConfirmed && status.ConfirmationStatus == "finalized" {
+			if err := s.transitionTxState(txCode, models.TxStateFinalized, nil, nil, status.Slot); err != nil {
+				return err
+			}
+			return nil
+		}
+	} else {
+		if current.State != "" && !isTerminalTxState(current.State) {
+			if err := s.transitionTxState(txCode, models.TxStateReverted, nil, nil, maxUint64(current.BlockNumber, latestBlock)); err != nil {
+				return err
+			}
+			_ = s.updateTxSubscriptionStatus(txCode, models.TxSubscriptionStatusCompleted)
+		}
+	}
+
 	return nil
 }
 
@@ -343,7 +374,7 @@ func (s *subscriptionService) handleProgramNotification(address string, notifica
 	sub = cloneAddressSub(sub)
 	s.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultRequestTimeoutMs)*time.Millisecond)
+	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultBackfillTimeoutMs)*time.Millisecond)
 	defer cancel()
 	resp, err := s.chain.QueryTransaction(ctx, notification.Signature)
 	if err != nil {
@@ -377,8 +408,7 @@ func (s *subscriptionService) backfillProgramGap(address string) error {
 	sub = cloneAddressSub(sub)
 	s.mu.RUnlock()
 
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultRequestTimeoutMs)*time.Millisecond)
-	defer cancel()
+	ctx := context.Background()
 
 	// 获取当前最新 slot
 	latest, err := s.chain.GetLatestBlock(ctx)
@@ -395,6 +425,8 @@ func (s *subscriptionService) backfillProgramGap(address string) error {
 	if latest.BlockNumber <= sub.LastObservedSlot {
 		return nil
 	}
+
+	log.Infof("backfillProgramGap %s : %d ===== %d ", address, sub.LastObservedSlot, latest.BlockNumber)
 
 	const pageLimit = 1000
 	before := ""
@@ -500,13 +532,6 @@ func (s *subscriptionService) transitionTxState(txCode string, newState string, 
 		}
 	}
 
-	s.mu.Lock()
-	s.publishedState[txCode] = next
-	s.mu.Unlock()
-	if err := s.store.SavePublishedState(context.Background(), txCode, next); err != nil {
-		log.Warningf("persist tracked tx state failed network=%s tx=%s state=%s err=%v", next.NetworkCode, txCode, newState, err)
-	}
-
 	if newState == models.TxStateReverted {
 		if err := s.publisher.PublishRollback(models.TxRollbackMessage{
 			TxCode:      txCode,
@@ -515,6 +540,14 @@ func (s *subscriptionService) transitionTxState(txCode string, newState string, 
 			log.Warningf("publish rollback failed network=%s tx=%s err=%v", next.NetworkCode, txCode, err)
 		}
 	}
+
+	s.mu.Lock()
+	s.publishedState[txCode] = next
+	s.mu.Unlock()
+	if err := s.store.SavePublishedState(context.Background(), txCode, next); err != nil {
+		log.Warningf("persist tracked tx state failed network=%s tx=%s state=%s err=%v", next.NetworkCode, txCode, newState, err)
+	}
+
 	return nil
 }
 
@@ -550,8 +583,8 @@ func cloneTxSub(sub *models.TxSubscription) *models.TxSubscription {
 	return &copy
 }
 
-func (s *subscriptionService) updateTxSubscriptionStatus(txCode string, status string, completed bool) error {
-	if err := s.store.UpdateTxSubscriptionStatus(context.Background(), txCode, status, completed); err != nil {
+func (s *subscriptionService) updateTxSubscriptionStatus(txCode string, status string) error {
+	if err := s.store.UpdateTxSubscriptionStatus(context.Background(), txCode, status); err != nil {
 		return err
 	}
 	s.mu.Lock()
@@ -562,7 +595,6 @@ func (s *subscriptionService) updateTxSubscriptionStatus(txCode string, status s
 	}
 	if sub, ok := s.txSubs[txCode]; ok {
 		sub.SubscriptionStatus = status
-		sub.Completed = completed
 	}
 	delete(s.txSubs, txCode)
 	return nil
@@ -591,38 +623,6 @@ func cloneAddressSub(sub *models.AddressSubscription) *models.AddressSubscriptio
 	}
 	copy := *sub
 	return &copy
-}
-
-func mapSignatureStatusToState(status *solana.SignatureStatus) string {
-	if status == nil || !status.Exists {
-		return ""
-	}
-	switch status.ConfirmationStatus {
-	case "finalized":
-		return models.TxStateFinalized
-	case "confirmed", "processed":
-		return models.TxStateConfirmed
-	default:
-		return ""
-	}
-}
-
-func txTransitionPath(current string, target string) []string {
-	if target == "" || txStateRank(target) <= txStateRank(current) {
-		return nil
-	}
-	path := []string{models.TxStateConfirmed, models.TxStateFinalized}
-	out := make([]string, 0, len(path))
-	for _, state := range path {
-		if txStateRank(state) <= txStateRank(current) {
-			continue
-		}
-		if txStateRank(state) > txStateRank(target) {
-			break
-		}
-		out = append(out, state)
-	}
-	return out
 }
 
 func shouldTransition(current string, target string) bool {

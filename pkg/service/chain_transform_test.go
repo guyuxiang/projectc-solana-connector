@@ -147,7 +147,6 @@ func TestToChainEventsTransformsSPLTokenBusinessEvents(t *testing.T) {
 	cfg := &config.Config{
 		Tokens: map[string]*config.Token{
 			"DTT_GLUSD": {
-				Code:        "DTT_GLUSD",
 				NetworkCode: "solana-devnet",
 				MintAddress: "mint-address",
 				Decimals:    2,

@@ -1,0 +1,413 @@
+basePath: /api/v1
+definitions:
+  models.AddressBalanceRequest:
+    properties:
+      address:
+        type: string
+    required:
+    - address
+    type: object
+  models.AddressSubscribeCancelRequest:
+    properties:
+      address:
+        type: string
+    required:
+    - address
+    type: object
+  models.AddressSubscribeRequest:
+    properties:
+      address:
+        type: string
+    required:
+    - address
+    type: object
+  models.ErrorResponse:
+    properties:
+      code:
+        type: string
+      message:
+        type: string
+    type: object
+  models.FaucetRequest:
+    properties:
+      acceptAddress:
+        type: string
+      idempotencyKey:
+        type: string
+      value:
+        type: number
+    required:
+    - acceptAddress
+    - idempotencyKey
+    - value
+    type: object
+  models.Response:
+    properties:
+      code:
+        type: string
+      data: {}
+      message:
+        type: string
+    type: object
+  models.SubscribeRange:
+    properties:
+      endBlockNumber:
+        type: integer
+      startBlockNumber:
+        type: integer
+    type: object
+  models.TokenBalanceRequest:
+    properties:
+      address:
+        type: string
+      tokenCode:
+        type: string
+    required:
+    - address
+    - tokenCode
+    type: object
+  models.TokenSupplyRequest:
+    properties:
+      tokenCode:
+        type: string
+    required:
+    - tokenCode
+    type: object
+  models.TxQueryRequest:
+    properties:
+      txCode:
+        type: string
+    required:
+    - txCode
+    type: object
+  models.TxSendRequest:
+    properties:
+      txSignResult:
+        type: string
+    required:
+    - txSignResult
+    type: object
+  models.TxSubscribeCancelRequest:
+    properties:
+      txCode:
+        type: string
+    required:
+    - txCode
+    type: object
+  models.TxSubscribeRequest:
+    properties:
+      subscribeRange:
+        $ref: '#/definitions/models.SubscribeRange'
+      txCode:
+        type: string
+    required:
+    - subscribeRange
+    - txCode
+    type: object
+info:
+  contact:
+    email: guyuxiang@qq.com
+    name: guyuxiang
+    url: https://guyuxiang.github.io
+  description: This is a projectc-solana-connector.
+  license:
+    name: Apache 2.0
+    url: http://www.apache.org/licenses/LICENSE-2.0.html
+  title: Swagger projectc-solana-connector
+  version: 0.1.0
+paths:
+  /inner/chain-data-subscribe/solana/address-subscribe:
+    post:
+      consumes:
+      - application/json
+      description: Register an address subscription to watch transactions related
+        to a wallet address.
+      parameters:
+      - description: Address subscription request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddressSubscribeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Subscribe address activity
+      tags:
+      - Solana
+  /inner/chain-data-subscribe/solana/address-subscribe-cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel an existing address subscription by wallet address.
+      parameters:
+      - description: Address subscription cancel request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddressSubscribeCancelRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Cancel address subscription
+      tags:
+      - Solana
+  /inner/chain-data-subscribe/solana/tx-subscribe:
+    post:
+      consumes:
+      - application/json
+      description: Register a transaction subscription to watch a transaction until
+        the configured end block.
+      parameters:
+      - description: Transaction subscription request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TxSubscribeRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Subscribe transaction updates
+      tags:
+      - Solana
+  /inner/chain-data-subscribe/solana/tx-subscribe-cancel:
+    post:
+      consumes:
+      - application/json
+      description: Cancel an existing transaction subscription by transaction code.
+      parameters:
+      - description: Transaction subscription cancel request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TxSubscribeCancelRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Cancel transaction subscription
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/address-balance:
+    post:
+      consumes:
+      - application/json
+      description: Get the native SOL balance of a wallet address on the configured
+        Solana network.
+      parameters:
+      - description: Address balance request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.AddressBalanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Query native balance by address
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/latest-block:
+    post:
+      consumes:
+      - application/json
+      description: Get the latest observed Solana block number and timestamp.
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Query latest block
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/token-balance:
+    post:
+      consumes:
+      - application/json
+      description: Get the balance of a configured SPL token for a specific wallet
+        address.
+      parameters:
+      - description: Token balance request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TokenBalanceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Query token balance
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/token-supply:
+    post:
+      consumes:
+      - application/json
+      description: Get the total supply of a configured SPL token by token code.
+      parameters:
+      - description: Token supply request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TokenSupplyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Query token supply
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/tx-query:
+    post:
+      consumes:
+      - application/json
+      description: Query on-chain transaction status, summary data, and decoded events
+        by transaction code.
+      parameters:
+      - description: Transaction query request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TxQueryRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Query a transaction
+      tags:
+      - Solana
+  /inner/chain-invoke/solana/common/tx-send:
+    post:
+      consumes:
+      - application/json
+      description: Broadcast a signed transaction and automatically create a transaction
+        subscription window.
+      parameters:
+      - description: Signed transaction payload
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TxSendRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Send a signed Solana transaction
+      tags:
+      - Solana
+  /inner/chain-invoke/solana/wallet/faucet:
+    post:
+      consumes:
+      - application/json
+      description: Send native SOL from the configured faucet account to the target
+        address and automatically subscribe the transaction.
+      parameters:
+      - description: Faucet request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.FaucetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+        "500":
+          description: Internal Server Error
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Send faucet tokens
+      tags:
+      - Solana
+swagger: "2.0"

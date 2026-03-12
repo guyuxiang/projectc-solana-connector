@@ -15,7 +15,7 @@ import (
 type SubscriptionStore interface {
 	Load(ctx context.Context) (*models.SubscriptionSnapshot, error)
 	SaveTxSubscription(ctx context.Context, sub *models.TxSubscription) error
-	UpdateTxSubscriptionStatus(ctx context.Context, txCode string, status string, completed bool) error
+	UpdateTxSubscriptionStatus(ctx context.Context, txCode string, status string) error
 	SaveAddressSubscription(ctx context.Context, sub *models.AddressSubscription) error
 	UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string) error
 	SavePublishedState(ctx context.Context, txCode string, state models.PublishedTxState) error
@@ -34,7 +34,6 @@ type txSubscriptionModel struct {
 	NetworkCode        string    `gorm:"column:network_code;size:64;not null"`
 	EndBlockNumber     uint64    `gorm:"column:end_block_number;not null"`
 	SubscriptionStatus string    `gorm:"column:subscription_status;size:32;not null"`
-	Completed          bool      `gorm:"column:completed;not null"`
 	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime"`
 	UpdatedAt          time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
@@ -115,7 +114,6 @@ func (s *mySQLSubscriptionStore) Load(ctx context.Context) (*models.Subscription
 			NetworkCode:        row.NetworkCode,
 			EndBlockNumber:     row.EndBlockNumber,
 			SubscriptionStatus: row.SubscriptionStatus,
-			Completed:          row.Completed,
 		}
 		snapshot.TxSubs[sub.TxCode] = sub
 	}
@@ -169,23 +167,21 @@ func (s *mySQLSubscriptionStore) SaveTxSubscription(ctx context.Context, sub *mo
 		NetworkCode:        sub.NetworkCode,
 		EndBlockNumber:     sub.EndBlockNumber,
 		SubscriptionStatus: sub.SubscriptionStatus,
-		Completed:          sub.Completed,
 		CreatedAt:          sub.CreatedAt,
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "tx_code"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"network_code", "end_block_number", "subscription_status", "completed", "updated_at",
+			"network_code", "end_block_number", "subscription_status", "updated_at",
 		}),
 	}).Create(&model).Error
 }
 
-func (s *mySQLSubscriptionStore) UpdateTxSubscriptionStatus(ctx context.Context, txCode string, status string, completed bool) error {
+func (s *mySQLSubscriptionStore) UpdateTxSubscriptionStatus(ctx context.Context, txCode string, status string) error {
 	return s.db.WithContext(ctx).Model(&txSubscriptionModel{}).
 		Where("tx_code = ?", txCode).
 		Updates(map[string]interface{}{
 			"subscription_status": status,
-			"completed":           completed,
 			"updated_at":          time.Now(),
 		}).Error
 }

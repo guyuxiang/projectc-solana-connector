@@ -37,6 +37,17 @@ type chainController struct {
 	subscription service.SubscriptionService
 }
 
+// TxSend godoc
+// @Summary Send a signed Solana transaction
+// @Description Broadcast a signed transaction and automatically create a transaction subscription window.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TxSendRequest true "Signed transaction payload"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /inner/chain-invoke/solana/common/tx-send [post]
 func (cc *chainController) TxSend(c *gin.Context) {
 	var req models.TxSendRequest
 	if !bindJSON(c, &req) {
@@ -54,6 +65,17 @@ func (cc *chainController) TxSend(c *gin.Context) {
 	ok(c, models.TxSendResponse{TxCode: txCode})
 }
 
+// Faucet godoc
+// @Summary Send faucet tokens
+// @Description Send native SOL from the configured faucet account to the target address and automatically subscribe the transaction.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.FaucetRequest true "Faucet request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Failure 500 {object} models.ErrorResponse
+// @Router /inner/chain-invoke/solana/wallet/faucet [post]
 func (cc *chainController) Faucet(c *gin.Context) {
 	var req models.FaucetRequest
 	if !bindJSON(c, &req) {
@@ -71,6 +93,16 @@ func (cc *chainController) Faucet(c *gin.Context) {
 	ok(c, models.TxSendResponse{TxCode: txCode})
 }
 
+// TxQuery godoc
+// @Summary Query a transaction
+// @Description Query on-chain transaction status, summary data, and decoded events by transaction code.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TxQueryRequest true "Transaction query request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/tx-query [post]
 func (cc *chainController) TxQuery(c *gin.Context) {
 	var req models.TxQueryRequest
 	if !bindJSON(c, &req) {
@@ -84,6 +116,16 @@ func (cc *chainController) TxQuery(c *gin.Context) {
 	ok(c, resp)
 }
 
+// AddressBalance godoc
+// @Summary Query native balance by address
+// @Description Get the native SOL balance of a wallet address on the configured Solana network.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.AddressBalanceRequest true "Address balance request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/address-balance [post]
 func (cc *chainController) AddressBalance(c *gin.Context) {
 	var req models.AddressBalanceRequest
 	if !bindJSON(c, &req) {
@@ -97,6 +139,16 @@ func (cc *chainController) AddressBalance(c *gin.Context) {
 	ok(c, resp)
 }
 
+// TokenSupply godoc
+// @Summary Query token supply
+// @Description Get the total supply of a configured SPL token by token code.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TokenSupplyRequest true "Token supply request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/token-supply [post]
 func (cc *chainController) TokenSupply(c *gin.Context) {
 	var req models.TokenSupplyRequest
 	if !bindJSON(c, &req) {
@@ -110,6 +162,16 @@ func (cc *chainController) TokenSupply(c *gin.Context) {
 	ok(c, resp)
 }
 
+// TokenBalance godoc
+// @Summary Query token balance
+// @Description Get the balance of a configured SPL token for a specific wallet address.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TokenBalanceRequest true "Token balance request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/token-balance [post]
 func (cc *chainController) TokenBalance(c *gin.Context) {
 	var req models.TokenBalanceRequest
 	if !bindJSON(c, &req) {
@@ -123,6 +185,15 @@ func (cc *chainController) TokenBalance(c *gin.Context) {
 	ok(c, resp)
 }
 
+// LatestBlock godoc
+// @Summary Query latest block
+// @Description Get the latest observed Solana block number and timestamp.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/latest-block [post]
 func (cc *chainController) LatestBlock(c *gin.Context) {
 	resp, err := cc.chain.GetLatestBlock(c.Request.Context())
 	if err != nil {
@@ -132,6 +203,16 @@ func (cc *chainController) LatestBlock(c *gin.Context) {
 	ok(c, resp)
 }
 
+// TxSubscribe godoc
+// @Summary Subscribe transaction updates
+// @Description Register a transaction subscription to watch a transaction until the configured end block.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TxSubscribeRequest true "Transaction subscription request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data-subscribe/solana/tx-subscribe [post]
 func (cc *chainController) TxSubscribe(c *gin.Context) {
 	var req models.TxSubscribeRequest
 	if !bindJSON(c, &req) {
@@ -144,6 +225,16 @@ func (cc *chainController) TxSubscribe(c *gin.Context) {
 	ok(c, nil)
 }
 
+// AddressSubscribe godoc
+// @Summary Subscribe address activity
+// @Description Register an address subscription to watch transactions related to a wallet address.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.AddressSubscribeRequest true "Address subscription request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data-subscribe/solana/address-subscribe [post]
 func (cc *chainController) AddressSubscribe(c *gin.Context) {
 	var req models.AddressSubscribeRequest
 	if !bindJSON(c, &req) {
@@ -156,6 +247,16 @@ func (cc *chainController) AddressSubscribe(c *gin.Context) {
 	ok(c, nil)
 }
 
+// TxSubscribeCancel godoc
+// @Summary Cancel transaction subscription
+// @Description Cancel an existing transaction subscription by transaction code.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TxSubscribeCancelRequest true "Transaction subscription cancel request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data-subscribe/solana/tx-subscribe-cancel [post]
 func (cc *chainController) TxSubscribeCancel(c *gin.Context) {
 	var req models.TxSubscribeCancelRequest
 	if !bindJSON(c, &req) {
@@ -168,6 +269,16 @@ func (cc *chainController) TxSubscribeCancel(c *gin.Context) {
 	ok(c, nil)
 }
 
+// AddressSubscribeCancel godoc
+// @Summary Cancel address subscription
+// @Description Cancel an existing address subscription by wallet address.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.AddressSubscribeCancelRequest true "Address subscription cancel request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data-subscribe/solana/address-subscribe-cancel [post]
 func (cc *chainController) AddressSubscribeCancel(c *gin.Context) {
 	var req models.AddressSubscribeCancelRequest
 	if !bindJSON(c, &req) {

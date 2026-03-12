@@ -57,7 +57,7 @@ func toChainEvents(cfg *config.Config, network *config.SolanaNetwork, tx solana.
 	}
 
 	for _, instruction := range tx.Transaction.Message.Instructions {
-		if decoder := defaultDecoderRegistry.get(instruction.ProgramID, instruction.Program); decoder != nil {
+		if decoder := defaultDecoderRegistry.get(instruction.Program); decoder != nil {
 			domainEvent, err := decoder.Decode(cfg, network, tx, instruction)
 			if err == nil && domainEvent.Type != "" {
 				events = append(events, models.ChainEvent{

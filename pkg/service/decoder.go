@@ -21,60 +21,53 @@ type DomainEvent struct {
 }
 
 type Decoder interface {
-	ProgramID() string
 	Decode(cfg *config.Config, network *config.SolanaNetwork, tx solana.TransactionResult, instruction solana.ParsedInstruction) (DomainEvent, error)
 }
 
 type decoderRegistry struct {
-	decoders       map[string]Decoder
 	programAliases map[string]Decoder
 }
 
-func newDecoderRegistry(decoders ...Decoder) *decoderRegistry {
-	items := make(map[string]Decoder, len(decoders))
-	aliases := make(map[string]Decoder)
-	for _, decoder := range decoders {
-		items[decoder.ProgramID()] = decoder
-		switch decoder.ProgramID() {
-		case splTokenProgramID:
-			aliases["spl-token"] = decoder
-		case splToken2022ProgramID:
-			aliases["spl-token-2022"] = decoder
-		}
-	}
-	return &decoderRegistry{decoders: items, programAliases: aliases}
+type decoderRegistration struct {
+	alias   string
+	decoder Decoder
 }
 
-func (r *decoderRegistry) get(programID string, program string) Decoder {
-	if decoder, ok := r.decoders[programID]; ok {
+func newDecoderRegistry(registrations ...decoderRegistration) *decoderRegistry {
+	aliases := make(map[string]Decoder)
+	for _, registration := range registrations {
+		if registration.alias != "" {
+			aliases[registration.alias] = registration.decoder
+		}
+	}
+	return &decoderRegistry{programAliases: aliases}
+}
+
+func (r *decoderRegistry) get(program string) Decoder {
+	if decoder, ok := r.programAliases[program]; ok {
 		return decoder
 	}
-	return r.programAliases[program]
+	return nil
 }
 
 var defaultDecoderRegistry = newDecoderRegistry(
-	newSPLTokenDecoder(splTokenProgramID),
-	newSPLTokenDecoder(splToken2022ProgramID),
+	decoderRegistration{
+		alias:   "spl-token",
+		decoder: newSPLTokenDecoder(),
+	},
+	decoderRegistration{
+		alias:   "spl-token-2022",
+		decoder: newSPLTokenDecoder(),
+	},
 )
 
-type splTokenDecoder struct {
-	programID string
-}
+type splTokenDecoder struct{}
 
-func newSPLTokenDecoder(programID string) Decoder {
-	return &splTokenDecoder{programID: programID}
-}
-
-func (d *splTokenDecoder) ProgramID() string {
-	return d.programID
+func newSPLTokenDecoder() Decoder {
+	return &splTokenDecoder{}
 }
 
 func (d *splTokenDecoder) Decode(cfg *config.Config, network *config.SolanaNetwork, tx solana.TransactionResult, instruction solana.ParsedInstruction) (DomainEvent, error) {
-	if !strings.EqualFold(instruction.ProgramID, d.programID) &&
-		!(strings.EqualFold(instruction.Program, "spl-token") && d.programID == splTokenProgramID) &&
-		!(strings.EqualFold(instruction.Program, "spl-token-2022") && d.programID == splToken2022ProgramID) {
-		return DomainEvent{}, nil
-	}
 	if len(instruction.Parsed) == 0 {
 		return DomainEvent{}, nil
 	}

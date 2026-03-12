@@ -143,7 +143,6 @@ type TxSubscription struct {
 	TxCode             string    `json:"txCode"`
 	EndBlockNumber     uint64    `json:"endBlockNumber"`
 	SubscriptionStatus string    `json:"subscriptionStatus"`
-	Completed          bool      `json:"completed"`
 }
 
 type AddressSubscription struct {
