@@ -1,6 +1,7 @@
 package service
 
 import (
+	"context"
 	"sync"
 
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
@@ -21,8 +22,18 @@ type App struct {
 func GetApp() *App {
 	appOnce.Do(func() {
 		cfg := config.GetConfig()
+		tokenStore, err := store.NewTokenStore(cfg)
+		if err != nil {
+			panic(err)
+		}
+		dbTokens, err := tokenStore.Load(context.Background())
+		if err != nil {
+			panic(err)
+		}
+		cfg.Tokens = dbTokens
+
 		publisher := mq.NewCallbackPublisher(cfg)
-		chain := NewChainService(cfg)
+		chain := NewChainService(cfg, tokenStore)
 		subscriptionStore, err := store.NewSubscriptionStore(cfg)
 		if err != nil {
 			panic(err)

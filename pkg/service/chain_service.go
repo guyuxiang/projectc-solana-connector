@@ -6,6 +6,7 @@ import (
 	"errors"
 	"fmt"
 	"math"
+	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -14,6 +15,8 @@ import (
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/models"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/solana"
+	"github.com/guyuxiang/projectc-solana-connector/pkg/store"
+	"gorm.io/gorm"
 )
 
 type ChainService interface {
@@ -23,6 +26,10 @@ type ChainService interface {
 	GetAddressBalance(ctx context.Context, address string) (*models.AddressBalanceResponse, error)
 	GetTokenSupply(ctx context.Context, tokenCode string) (*models.TokenSupplyResponse, error)
 	GetTokenBalance(ctx context.Context, tokenCode string, address string) (*models.TokenBalanceResponse, error)
+	AddToken(ctx context.Context, req models.TokenAddRequest) (*models.TokenResponse, error)
+	GetToken(ctx context.Context, tokenCode string) (*models.TokenResponse, error)
+	ListTokens(ctx context.Context, req models.TokenListRequest) (*models.TokenListResponse, error)
+	DeleteToken(ctx context.Context, tokenCode string) error
 	GetLatestBlock(ctx context.Context) (*models.LatestBlockResponse, error)
 	GetTransactionReceipt(ctx context.Context, txCode string) (*models.ChainTx, []models.ChainEvent, bool, error)
 	FetchAddressSignatures(ctx context.Context, address string, opts solana.SignatureQueryOptions) ([]solana.SignatureInfo, error)
@@ -33,7 +40,7 @@ type ChainService interface {
 	WatchProgramLogs(ctx context.Context, program string, onSubscribed func() error, handler func(solana.LogsNotification) error) error
 }
 
-func NewChainService(cfg *config.Config) ChainService {
+func NewChainService(cfg *config.Config, tokenStore store.TokenStore) ChainService {
 	timeout := time.Duration(defaultRequestTimeoutMs) * time.Millisecond
 	backoff := time.Duration(defaultRetryBackoffMs) * time.Millisecond
 	clients := make(map[string]*solana.Client, len(cfg.Networks))
@@ -49,6 +56,7 @@ func NewChainService(cfg *config.Config) ChainService {
 	}
 	return &chainService{
 		cfg:              cfg,
+		tokenStore:       tokenStore,
 		clients:          clients,
 		wsClients:        wsClients,
 		network:          mustResolveSingleNetwork(cfg),
@@ -57,10 +65,12 @@ func NewChainService(cfg *config.Config) ChainService {
 }
 
 type chainService struct {
-	cfg       *config.Config
-	clients   map[string]*solana.Client
-	wsClients map[string]*solana.WSClient
-	network   *config.SolanaNetwork
+	cfg        *config.Config
+	tokenMu    sync.RWMutex
+	tokenStore store.TokenStore
+	clients    map[string]*solana.Client
+	wsClients  map[string]*solana.WSClient
+	network    *config.SolanaNetwork
 
 	idempotencyStore *idempotencyStore
 }
@@ -261,6 +271,98 @@ func (s *chainService) GetTokenBalance(ctx context.Context, tokenCode string, ad
 	return &models.TokenBalanceResponse{Value: total}, nil
 }
 
+func (s *chainService) AddToken(ctx context.Context, req models.TokenAddRequest) (*models.TokenResponse, error) {
+	token := &config.Token{
+		NetworkCode: req.NetworkCode,
+		MintAddress: req.MintAddress,
+		Decimals:    req.Decimals,
+	}
+	if err := s.tokenStore.Save(ctx, req.Code, token); err != nil {
+		return nil, err
+	}
+
+	s.tokenMu.Lock()
+	if s.cfg.Tokens == nil {
+		s.cfg.Tokens = make(map[string]*config.Token)
+	}
+	s.cfg.Tokens[req.Code] = token
+	s.tokenMu.Unlock()
+
+	return &models.TokenResponse{
+		Code:        req.Code,
+		NetworkCode: req.NetworkCode,
+		MintAddress: req.MintAddress,
+		Decimals:    req.Decimals,
+	}, nil
+}
+
+func (s *chainService) GetToken(ctx context.Context, tokenCode string) (*models.TokenResponse, error) {
+	s.tokenMu.RLock()
+	token, ok := s.cfg.Tokens[tokenCode]
+	s.tokenMu.RUnlock()
+	if !ok || token == nil {
+		var err error
+		token, err = s.tokenStore.Get(ctx, tokenCode)
+		if err != nil {
+			if errors.Is(err, gorm.ErrRecordNotFound) {
+				return nil, fmt.Errorf("tokenCode=%s not configured", tokenCode)
+			}
+			return nil, err
+		}
+		s.tokenMu.Lock()
+		if s.cfg.Tokens == nil {
+			s.cfg.Tokens = make(map[string]*config.Token)
+		}
+		s.cfg.Tokens[tokenCode] = token
+		s.tokenMu.Unlock()
+	}
+
+	return &models.TokenResponse{
+		Code:        tokenCode,
+		NetworkCode: token.NetworkCode,
+		MintAddress: token.MintAddress,
+		Decimals:    token.Decimals,
+	}, nil
+}
+
+func (s *chainService) ListTokens(ctx context.Context, req models.TokenListRequest) (*models.TokenListResponse, error) {
+	tokens, err := s.tokenStore.List(ctx, req.NetworkCode)
+	if err != nil {
+		return nil, err
+	}
+
+	codes := make([]string, 0, len(tokens))
+	for code := range tokens {
+		codes = append(codes, code)
+	}
+	sort.Strings(codes)
+
+	items := make([]models.TokenResponse, 0, len(codes))
+	for _, code := range codes {
+		token := tokens[code]
+		if token == nil {
+			continue
+		}
+		items = append(items, models.TokenResponse{
+			Code:        code,
+			NetworkCode: token.NetworkCode,
+			MintAddress: token.MintAddress,
+			Decimals:    token.Decimals,
+		})
+	}
+	return &models.TokenListResponse{Tokens: items}, nil
+}
+
+func (s *chainService) DeleteToken(ctx context.Context, tokenCode string) error {
+	if err := s.tokenStore.Delete(ctx, tokenCode); err != nil {
+		return err
+	}
+	s.tokenMu.Lock()
+	delete(s.cfg.Tokens, tokenCode)
+	s.tokenMu.Unlock()
+	return nil
+}
+
 func (s *chainService) GetLatestBlock(ctx context.Context) (*models.LatestBlockResponse, error) {
 	client, err := s.resolveClient()
 	if err != nil {
@@ -453,7 +555,9 @@ func (s *chainService) resolveWSClient() (*solana.WSClient, error) {
 }
 
 func (s *chainService) resolveToken(tokenCode string) (*config.Token, error) {
+	s.tokenMu.RLock()
 	token, ok := s.cfg.Tokens[tokenCode]
+	s.tokenMu.RUnlock()
 	if !ok || token == nil {
 		return nil, fmt.Errorf("tokenCode=%s not configured", tokenCode)
 	}

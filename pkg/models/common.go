@@ -84,6 +84,36 @@ type TokenBalanceResponse struct {
 	Value float64 `json:"value"`
 }
 
+type TokenAddRequest struct {
+	Code        string `json:"code" binding:"required"`
+	NetworkCode string `json:"networkCode" binding:"required"`
+	MintAddress string `json:"mintAddress" binding:"required"`
+	Decimals    uint8  `json:"decimals" binding:"required"`
+}
+
+type TokenGetRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+type TokenDeleteRequest struct {
+	Code string `json:"code" binding:"required"`
+}
+
+type TokenListRequest struct {
+	NetworkCode string `json:"networkCode"`
+}
+
+type TokenResponse struct {
+	Code        string `json:"code"`
+	NetworkCode string `json:"networkCode"`
+	MintAddress string `json:"mintAddress"`
+	Decimals    uint8  `json:"decimals"`
+}
+
+type TokenListResponse struct {
+	Tokens []TokenResponse `json:"tokens"`
+}
+
 type LatestBlockRequest struct{}
 
 type LatestBlockResponse struct {

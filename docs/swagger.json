@@ -245,6 +245,46 @@
                 }
             }
         },
+        "/inner/chain-data/solana/common/token-add": {
+            "post": {
+                "description": "Add a token definition into database-backed token registry.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Solana"
+                ],
+                "summary": "Add or update token",
+                "parameters": [
+                    {
+                        "description": "Token add request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TokenAddRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
         "/inner/chain-data/solana/common/token-balance": {
             "post": {
                 "description": "Get the balance of a configured SPL token for a specific wallet address.",
@@ -266,6 +306,126 @@
                         "required": true,
                         "schema": {
                             "$ref": "#/definitions/models.TokenBalanceRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inner/chain-data/solana/common/token-delete": {
+            "post": {
+                "description": "Delete a token definition from database-backed token registry by token code.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Solana"
+                ],
+                "summary": "Delete token",
+                "parameters": [
+                    {
+                        "description": "Token delete request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TokenDeleteRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inner/chain-data/solana/common/token-get": {
+            "post": {
+                "description": "Get a token definition from database-backed token registry by token code.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Solana"
+                ],
+                "summary": "Get token",
+                "parameters": [
+                    {
+                        "description": "Token get request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TokenGetRequest"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "OK",
+                        "schema": {
+                            "$ref": "#/definitions/models.Response"
+                        }
+                    },
+                    "400": {
+                        "description": "Bad Request",
+                        "schema": {
+                            "$ref": "#/definitions/models.ErrorResponse"
+                        }
+                    }
+                }
+            }
+        },
+        "/inner/chain-data/solana/common/token-list": {
+            "post": {
+                "description": "List token definitions from database-backed token registry, optionally filtered by network code.",
+                "consumes": [
+                    "application/json"
+                ],
+                "produces": [
+                    "application/json"
+                ],
+                "tags": [
+                    "Solana"
+                ],
+                "summary": "List tokens",
+                "parameters": [
+                    {
+                        "description": "Token list request",
+                        "name": "request",
+                        "in": "body",
+                        "required": true,
+                        "schema": {
+                            "$ref": "#/definitions/models.TokenListRequest"
                         }
                     }
                 ],
@@ -545,6 +705,29 @@
                 }
             }
         },
+        "models.TokenAddRequest": {
+            "type": "object",
+            "required": [
+                "code",
+                "decimals",
+                "mintAddress",
+                "networkCode"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "mintAddress": {
+                    "type": "string"
+                },
+                "networkCode": {
+                    "type": "string"
+                }
+            }
+        },
         "models.TokenBalanceRequest": {
             "type": "object",
             "required": [
@@ -556,6 +739,36 @@
                     "type": "string"
                 },
                 "tokenCode": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TokenDeleteRequest": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TokenGetRequest": {
+            "type": "object",
+            "required": [
+                "code"
+            ],
+            "properties": {
+                "code": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TokenListRequest": {
+            "type": "object",
+            "properties": {
+                "networkCode": {
                     "type": "string"
                 }
             }

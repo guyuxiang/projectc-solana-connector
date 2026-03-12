@@ -56,6 +56,22 @@ definitions:
       startBlockNumber:
         type: integer
     type: object
+  models.TokenAddRequest:
+    properties:
+      code:
+        type: string
+      decimals:
+        type: integer
+      mintAddress:
+        type: string
+      networkCode:
+        type: string
+    required:
+    - code
+    - decimals
+    - mintAddress
+    - networkCode
+    type: object
   models.TokenBalanceRequest:
     properties:
       address:
@@ -65,6 +81,25 @@ definitions:
     required:
     - address
     - tokenCode
+    type: object
+  models.TokenDeleteRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  models.TokenGetRequest:
+    properties:
+      code:
+        type: string
+    required:
+    - code
+    type: object
+  models.TokenListRequest:
+    properties:
+      networkCode:
+        type: string
     type: object
   models.TokenSupplyRequest:
     properties:
@@ -268,6 +303,32 @@ paths:
       summary: Query latest block
       tags:
       - Solana
+  /inner/chain-data/solana/common/token-add:
+    post:
+      consumes:
+      - application/json
+      description: Add a token definition into database-backed token registry.
+      parameters:
+      - description: Token add request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TokenAddRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Add or update token
+      tags:
+      - Solana
   /inner/chain-data/solana/common/token-balance:
     post:
       consumes:
@@ -293,6 +354,87 @@ paths:
           schema:
             $ref: '#/definitions/models.ErrorResponse'
       summary: Query token balance
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/token-delete:
+    post:
+      consumes:
+      - application/json
+      description: Delete a token definition from database-backed token registry by
+        token code.
+      parameters:
+      - description: Token delete request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TokenDeleteRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Delete token
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/token-get:
+    post:
+      consumes:
+      - application/json
+      description: Get a token definition from database-backed token registry by token
+        code.
+      parameters:
+      - description: Token get request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TokenGetRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: Get token
+      tags:
+      - Solana
+  /inner/chain-data/solana/common/token-list:
+    post:
+      consumes:
+      - application/json
+      description: List token definitions from database-backed token registry, optionally
+        filtered by network code.
+      parameters:
+      - description: Token list request
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/models.TokenListRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/models.Response'
+        "400":
+          description: Bad Request
+          schema:
+            $ref: '#/definitions/models.ErrorResponse'
+      summary: List tokens
       tags:
       - Solana
   /inner/chain-data/solana/common/token-supply:

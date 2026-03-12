@@ -9,7 +9,7 @@ type Config struct {
 	Log       *Log                      `yaml:"log"`
 	Connector *Connector                `yaml:"connector"`
 	Networks  map[string]*SolanaNetwork `yaml:"networks"`
-	Tokens    map[string]*Token         `yaml:"tokens"`
+	Tokens    map[string]*Token         `yaml:"-" mapstructure:"-"`
 }
 
 type Server struct {

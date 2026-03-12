@@ -50,11 +50,17 @@ func InstallRoutes(r *gin.Engine) {
 func registerChainRoutes(router gin.IRoutes, chainController controller.ChainController) {
 	router.POST("/inner/chain-invoke/solana/common/tx-send", chainController.TxSend)
 	router.POST("/inner/chain-invoke/solana/wallet/faucet", chainController.Faucet)
+
 	router.POST("/inner/chain-data/solana/common/tx-query", chainController.TxQuery)
 	router.POST("/inner/chain-data/solana/common/address-balance", chainController.AddressBalance)
 	router.POST("/inner/chain-data/solana/common/token-supply", chainController.TokenSupply)
 	router.POST("/inner/chain-data/solana/common/token-balance", chainController.TokenBalance)
+	router.POST("/inner/chain-data/solana/common/token-add", chainController.TokenAdd)
+	router.POST("/inner/chain-data/solana/common/token-get", chainController.TokenGet)
+	router.POST("/inner/chain-data/solana/common/token-list", chainController.TokenList)
+	router.POST("/inner/chain-data/solana/common/token-delete", chainController.TokenDelete)
 	router.POST("/inner/chain-data/solana/common/latest-block", chainController.LatestBlock)
+
 	router.POST("/inner/chain-data-subscribe/solana/tx-subscribe", chainController.TxSubscribe)
 	router.POST("/inner/chain-data-subscribe/solana/address-subscribe", chainController.AddressSubscribe)
 	router.POST("/inner/chain-data-subscribe/solana/tx-subscribe-cancel", chainController.TxSubscribeCancel)

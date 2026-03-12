@@ -17,6 +17,10 @@ type ChainController interface {
 	AddressBalance(c *gin.Context)
 	TokenSupply(c *gin.Context)
 	TokenBalance(c *gin.Context)
+	TokenAdd(c *gin.Context)
+	TokenGet(c *gin.Context)
+	TokenList(c *gin.Context)
+	TokenDelete(c *gin.Context)
 	LatestBlock(c *gin.Context)
 	TxSubscribe(c *gin.Context)
 	AddressSubscribe(c *gin.Context)
@@ -183,6 +187,99 @@ func (cc *chainController) TokenBalance(c *gin.Context) {
 		return
 	}
 	ok(c, resp)
+}
+
+// TokenAdd godoc
+// @Summary Add or update token
+// @Description Add a token definition into database-backed token registry.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TokenAddRequest true "Token add request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/token-add [post]
+func (cc *chainController) TokenAdd(c *gin.Context) {
+	var req models.TokenAddRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	resp, err := cc.chain.AddToken(c.Request.Context(), req)
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	ok(c, resp)
+}
+
+// TokenGet godoc
+// @Summary Get token
+// @Description Get a token definition from database-backed token registry by token code.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TokenGetRequest true "Token get request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/token-get [post]
+func (cc *chainController) TokenGet(c *gin.Context) {
+	var req models.TokenGetRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	resp, err := cc.chain.GetToken(c.Request.Context(), req.Code)
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	ok(c, resp)
+}
+
+// TokenList godoc
+// @Summary List tokens
+// @Description List token definitions from database-backed token registry, optionally filtered by network code.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TokenListRequest true "Token list request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/token-list [post]
+func (cc *chainController) TokenList(c *gin.Context) {
+	var req models.TokenListRequest
+	if c.Request.ContentLength > 0 {
+		if !bindJSON(c, &req) {
+			return
+		}
+	}
+	resp, err := cc.chain.ListTokens(c.Request.Context(), req)
+	if err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	ok(c, resp)
+}
+
+// TokenDelete godoc
+// @Summary Delete token
+// @Description Delete a token definition from database-backed token registry by token code.
+// @Tags Solana
+// @Accept json
+// @Produce json
+// @Param request body models.TokenDeleteRequest true "Token delete request"
+// @Success 200 {object} models.Response
+// @Failure 400 {object} models.ErrorResponse
+// @Router /inner/chain-data/solana/common/token-delete [post]
+func (cc *chainController) TokenDelete(c *gin.Context) {
+	var req models.TokenDeleteRequest
+	if !bindJSON(c, &req) {
+		return
+	}
+	if err := cc.chain.DeleteToken(c.Request.Context(), req.Code); err != nil {
+		fail(c, http.StatusBadRequest, err)
+		return
+	}
+	ok(c, nil)
 }
 
 // LatestBlock godoc
