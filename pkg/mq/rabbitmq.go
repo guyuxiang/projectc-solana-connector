@@ -49,11 +49,11 @@ type logPublisher struct {
 }
 
 func (p *logPublisher) PublishTx(msg models.TxCallbackMessage) error {
-	_, err := json.Marshal(msg)
+	payload, err := json.Marshal(msg)
 	if err != nil {
 		return err
 	}
-	// log.Infof("mq publish type=tx mode=%s exchange=%s exchangeType=%s payload=%s", p.mode, txCallbackExchange, p.exchangeType, string(payload))
+	log.Infof("mq publish type=tx mode=%s exchange=%s exchangeType=%s payload=%s", p.mode, txCallbackExchange, p.exchangeType, string(payload))
 	return nil
 }
 
