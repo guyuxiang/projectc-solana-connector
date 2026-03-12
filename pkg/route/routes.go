@@ -62,7 +62,7 @@ func registerChainRoutes(router gin.IRoutes, chainController controller.ChainCon
 	router.POST("/inner/chain-data/solana/common/latest-block", chainController.LatestBlock)
 
 	router.POST("/inner/chain-data-subscribe/solana/tx-subscribe", chainController.TxSubscribe)
-	router.POST("/inner/chain-data-subscribe/solana/address-subscribe", chainController.AddressSubscribe)
 	router.POST("/inner/chain-data-subscribe/solana/tx-subscribe-cancel", chainController.TxSubscribeCancel)
+	router.POST("/inner/chain-data-subscribe/solana/address-subscribe", chainController.AddressSubscribe)
 	router.POST("/inner/chain-data-subscribe/solana/address-subscribe-cancel", chainController.AddressSubscribeCancel)
 }
