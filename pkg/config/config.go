@@ -36,7 +36,6 @@ func init() {
 		fmt.Fprintf(os.Stderr, "Fatal error config file: %s \n", err)
 	}
 
-	viper.SetEnvPrefix(SERVICE_NAME)
 	viper.SetEnvKeyReplacer(strings.NewReplacer(".", "_"))
 	viper.AutomaticEnv()
 
