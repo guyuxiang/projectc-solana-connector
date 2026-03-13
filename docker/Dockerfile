@@ -1,8 +1,6 @@
 # Building stage
 FROM docker.m.daocloud.io/golang:1.24
 
-RUN apk add --update make
-
 WORKDIR /go/src/github.com/guyuxiang/projectc-solana-connector
 
 COPY . /go/src/github.com/guyuxiang/projectc-solana-connector
