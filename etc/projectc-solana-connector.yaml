@@ -20,7 +20,7 @@ mysql:
   connMaxLifeSec: 300
 callback:
   mode: "http"
-  http-url: "http://127.0.0.1:8083/api/v1/inner/wallet/callback"
+  http-url: "http://unblock-kms-svc/api/v1/inner/wallet/callback"
   host: "dev-callback.lls.com"
   port: 5672
   username: "projectc"
