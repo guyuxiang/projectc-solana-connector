@@ -4,7 +4,7 @@ type Config struct {
 	Server    *Server                   `yaml:"server"`
 	Auth      *Auth                     `yaml:"auth"`
 	MySQL     *MySQLConfig              `yaml:"mysql"`
-	MQ        *MQConfig                 `yaml:"mq"`
+	Callback  *CallbackConfig           `yaml:"callback"`
 	Gin       *Gin                      `yaml:"gin"`
 	Log       *Log                      `yaml:"log"`
 	Connector *Connector                `yaml:"connector"`
@@ -36,8 +36,9 @@ type Connector struct {
 	TxSubscribeWindow uint64 `yaml:"txSubscribeWindow"`
 }
 
-type MQConfig struct {
+type CallbackConfig struct {
 	Mode              string `yaml:"mode"`
+	HTTPURL           string `yaml:"http-url"`
 	URL               string `yaml:"url"`
 	Host              string `yaml:"host"`
 	Port              int    `yaml:"port"`

@@ -18,9 +18,10 @@ mysql:
   maxOpenconns: 200
   maxIdleConns: 200
   connMaxLifeSec: 300
-mq:
-  mode: "log"
-  host: "dev-mq.lls.com"
+callback:
+  mode: "http"
+  http-url: "http://127.0.0.1:8083/api/v1/inner/wallet/callback"
+  host: "dev-callback.lls.com"
   port: 5672
   username: "projectc"
   password: "projectc"

@@ -1,4 +1,4 @@
-package mq
+package callback
 
 import (
 	"context"
@@ -30,12 +30,17 @@ type CallbackPublisher interface {
 }
 
 func NewCallbackPublisher(cfg *config.Config) CallbackPublisher {
-	if cfg != nil && cfg.MQ != nil && cfg.MQ.Mode == "rabbitmq" {
-		return newRabbitMQPublisher(cfg.MQ)
+	if cfg != nil && cfg.Callback != nil {
+		switch cfg.Callback.Mode {
+		case "rabbitmq":
+			return newRabbitMQPublisher(cfg.Callback)
+		case "http":
+			return newHTTPPublisher(cfg.Callback)
+		}
 	}
 	mode := "log"
-	if cfg != nil && cfg.MQ != nil && cfg.MQ.Mode != "" {
-		mode = cfg.MQ.Mode
+	if cfg != nil && cfg.Callback != nil && cfg.Callback.Mode != "" {
+		mode = cfg.Callback.Mode
 	}
 	return &logPublisher{
 		mode:         mode,
@@ -53,7 +58,7 @@ func (p *logPublisher) PublishTx(msg models.TxCallbackMessage) error {
 	if err != nil {
 		return err
 	}
-	log.Infof("mq publish type=tx mode=%s exchange=%s exchangeType=%s payload=%s", p.mode, txCallbackExchange, p.exchangeType, string(payload))
+	log.Infof("callback publish type=tx mode=%s exchange=%s exchangeType=%s payload=%s", p.mode, txCallbackExchange, p.exchangeType, string(payload))
 	return nil
 }
 
@@ -62,12 +67,12 @@ func (p *logPublisher) PublishRollback(msg models.TxRollbackMessage) error {
 	if err != nil {
 		return err
 	}
-	log.Warningf("mq publish type=rollback mode=%s exchange=%s exchangeType=%s payload=%s", p.mode, txCancelExchange, p.exchangeType, string(payload))
+	log.Warningf("callback publish type=rollback mode=%s exchange=%s exchangeType=%s payload=%s", p.mode, txCancelExchange, p.exchangeType, string(payload))
 	return nil
 }
 
 type rabbitMQPublisher struct {
-	cfg *config.MQConfig
+	cfg *config.CallbackConfig
 
 	conn          *amqp.Connection
 	ch            *amqp.Channel
@@ -76,7 +81,7 @@ type rabbitMQPublisher struct {
 	notifyConfirm chan amqp.Confirmation
 }
 
-func newRabbitMQPublisher(cfg *config.MQConfig) CallbackPublisher {
+func newRabbitMQPublisher(cfg *config.CallbackConfig) CallbackPublisher {
 	return &rabbitMQPublisher{cfg: cfg}
 }
 
@@ -95,9 +100,9 @@ func (p *rabbitMQPublisher) publish(kind string, exchange string, msg interface{
 	}
 
 	if kind == "tx" {
-		log.Infof("mq publish type=%s exchange=%s exchangeType=%s payload=%s", kind, exchange, callbackExchangeType, string(payload))
+		log.Infof("callback publish type=%s exchange=%s exchangeType=%s payload=%s", kind, exchange, callbackExchangeType, string(payload))
 	} else {
-		log.Warningf("mq publish type=%s exchange=%s exchangeType=%s payload=%s", kind, exchange, callbackExchangeType, string(payload))
+		log.Warningf("callback publish type=%s exchange=%s exchangeType=%s payload=%s", kind, exchange, callbackExchangeType, string(payload))
 	}
 
 	ctx, cancel := context.WithTimeout(context.Background(), publishTimeout)
@@ -164,7 +169,7 @@ func (p *rabbitMQPublisher) ensureConnected() error {
 	}
 
 	if p.cfg == nil || p.cfg.URL == "" {
-		return errors.New("rabbitmq mq.url is required when mq.mode=rabbitmq")
+		return errors.New("rabbitmq callback.url is required when callback.mode=rabbitmq")
 	}
 
 	conn, err := amqp.DialConfig(p.cfg.URL, amqp.Config{

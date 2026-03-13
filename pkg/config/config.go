@@ -97,8 +97,8 @@ func normalizeConfig(c *Config) {
 	if c.MySQL == nil {
 		c.MySQL = &MySQLConfig{}
 	}
-	if c.MQ == nil {
-		c.MQ = &MQConfig{}
+	if c.Callback == nil {
+		c.Callback = &CallbackConfig{}
 	}
 	if c.Connector == nil {
 		c.Connector = &Connector{}
@@ -109,14 +109,14 @@ func normalizeConfig(c *Config) {
 	if c.Connector.TxSubscribeWindow == 0 {
 		c.Connector.TxSubscribeWindow = 300
 	}
-	if c.MQ.Mode == "" {
-		c.MQ.Mode = "log"
+	if c.Callback.Mode == "" {
+		c.Callback.Mode = "log"
 	}
-	if c.MQ.VirtualHost == "" && c.MQ.VirtualHostLegacy != "" {
-		c.MQ.VirtualHost = c.MQ.VirtualHostLegacy
+	if c.Callback.VirtualHost == "" && c.Callback.VirtualHostLegacy != "" {
+		c.Callback.VirtualHost = c.Callback.VirtualHostLegacy
 	}
-	if c.MQ.URL == "" && c.MQ.Host != "" {
-		c.MQ.URL = buildAMQPURL(c.MQ)
+	if c.Callback.URL == "" && c.Callback.Host != "" {
+		c.Callback.URL = buildAMQPURL(c.Callback)
 	}
 	if c.MySQL.MaxOpenConns == 0 {
 		c.MySQL.MaxOpenConns = c.MySQL.MaxOpenConnsV2
@@ -155,7 +155,7 @@ func normalizeConfig(c *Config) {
 	}
 }
 
-func buildAMQPURL(cfg *MQConfig) string {
+func buildAMQPURL(cfg *CallbackConfig) string {
 	host := cfg.Host
 	port := cfg.Port
 	if port == 0 {

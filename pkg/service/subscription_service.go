@@ -6,10 +6,10 @@ import (
 	"sync"
 	"time"
 
+	"github.com/guyuxiang/projectc-solana-connector/pkg/callback"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/log"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/models"
-	"github.com/guyuxiang/projectc-solana-connector/pkg/mq"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/solana"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/store"
 )
@@ -21,7 +21,7 @@ type SubscriptionService interface {
 	CancelAddressSubscription(address string) error
 }
 
-func NewSubscriptionService(cfg *config.Config, chain ChainService, publisher mq.CallbackPublisher, subscriptionStore store.SubscriptionStore) SubscriptionService {
+func NewSubscriptionService(cfg *config.Config, chain ChainService, publisher callback.CallbackPublisher, subscriptionStore store.SubscriptionStore) SubscriptionService {
 	s := &subscriptionService{
 		cfg:             cfg,
 		chain:           chain,
@@ -41,7 +41,7 @@ func NewSubscriptionService(cfg *config.Config, chain ChainService, publisher mq
 type subscriptionService struct {
 	cfg       *config.Config
 	chain     ChainService
-	publisher mq.CallbackPublisher
+	publisher callback.CallbackPublisher
 	store     store.SubscriptionStore
 
 	mu              sync.RWMutex

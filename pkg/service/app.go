@@ -4,8 +4,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/guyuxiang/projectc-solana-connector/pkg/callback"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/config"
-	"github.com/guyuxiang/projectc-solana-connector/pkg/mq"
 	"github.com/guyuxiang/projectc-solana-connector/pkg/store"
 )
 
@@ -32,7 +32,7 @@ func GetApp() *App {
 		}
 		cfg.Tokens = dbTokens
 
-		publisher := mq.NewCallbackPublisher(cfg)
+		publisher := callback.NewCallbackPublisher(cfg)
 		chain := NewChainService(cfg, tokenStore)
 		subscriptionStore, err := store.NewSubscriptionStore(cfg)
 		if err != nil {
