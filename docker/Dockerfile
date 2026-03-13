@@ -10,7 +10,6 @@ ENV GOOS linux
 ENV GO111MODULE=on
 ENV TIMEZONE "Asia/Shanghai"
 ENV GOPROXY=https://mirrors.aliyun.com/goproxy/,direct
-ENV TIMEZONE "Asia/Shanghai"
 
 RUN make src.build
 RUN mv build/pkg/cmd/projectc-solana-connector/projectc-solana-connector /go/bin
