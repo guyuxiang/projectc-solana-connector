@@ -176,12 +176,17 @@ type TxSubscription struct {
 }
 
 type AddressSubscription struct {
-	CreatedAt          time.Time `json:"created_at"`
-	NetworkCode        string    `json:"networkCode"`
-	Address            string    `json:"address"`
-	LastObservedSlot   uint64    `json:"lastObservedSlot"`
-	LastObservedTxCode string    `json:"lastObservedTxCode"`
-	SubscriptionStatus string    `json:"subscriptionStatus"`
+	CreatedAt          time.Time                    `json:"created_at"`
+	NetworkCode        string                       `json:"networkCode"`
+	Address            string                       `json:"address"`
+	TrackedAccounts    []string                     `json:"trackedAccounts,omitempty"`
+	AccountCheckpoints map[string]AddressCheckpoint `json:"accountCheckpoints,omitempty"`
+	SubscriptionStatus string                       `json:"subscriptionStatus"`
+}
+
+type AddressCheckpoint struct {
+	LastObservedSlot   uint64 `json:"lastObservedSlot"`
+	LastObservedTxCode string `json:"lastObservedTxCode"`
 }
 
 type PublishedTxState struct {

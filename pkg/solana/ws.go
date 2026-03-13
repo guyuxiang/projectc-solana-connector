@@ -26,6 +26,11 @@ type LogsNotification struct {
 	Logs      []string
 }
 
+type AccountNotification struct {
+	Pubkey string
+	Slot   uint64
+}
+
 type WSClient struct {
 	endpoints    []string
 	requestID    uint64
@@ -208,6 +213,61 @@ func (c *WSClient) StreamLogsNotifications(ctx context.Context, mention string, 
 			Slot:      payload.Context.Slot,
 			Err:       payload.Value.Err,
 			Logs:      payload.Value.Logs,
+		}); err != nil {
+			return err
+		}
+	}
+}
+
+func (c *WSClient) StreamAccountNotifications(ctx context.Context, pubkey string, commitment string, onSubscribed func() error, handler func(AccountNotification) error) error {
+	conn, err := c.connect(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+	go closeConnOnDone(ctx, conn)
+	stopHeartbeat := c.startHeartbeat(ctx, conn)
+	defer stopHeartbeat()
+
+	subscriptionID, err := c.subscribe(ctx, conn, "accountSubscribe", []interface{}{
+		pubkey,
+		map[string]interface{}{
+			"commitment": commitment,
+			"encoding":   "base64",
+		},
+	})
+	if err != nil {
+		return err
+	}
+	defer c.unsubscribe(conn, "accountUnsubscribe", subscriptionID)
+	if onSubscribed != nil {
+		if err := onSubscribed(); err != nil {
+			return err
+		}
+	}
+
+	for {
+		var envelope wsEnvelope
+		if err := conn.ReadJSON(&envelope); err != nil {
+			if ctx.Err() != nil {
+				return ctx.Err()
+			}
+			return err
+		}
+		if envelope.Method != "accountNotification" || len(envelope.Params.Result) == 0 {
+			continue
+		}
+		var payload struct {
+			Context struct {
+				Slot uint64 `json:"slot"`
+			} `json:"context"`
+		}
+		if err := json.Unmarshal(envelope.Params.Result, &payload); err != nil {
+			return err
+		}
+		if err := handler(AccountNotification{
+			Pubkey: pubkey,
+			Slot:   payload.Context.Slot,
 		}); err != nil {
 			return err
 		}

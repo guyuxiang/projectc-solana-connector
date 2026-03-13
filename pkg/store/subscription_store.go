@@ -2,6 +2,7 @@ package store
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"time"
 
@@ -41,13 +42,15 @@ type txSubscriptionModel struct {
 func (txSubscriptionModel) TableName() string { return "connector_tx_subscriptions" }
 
 type addressSubscriptionModel struct {
-	Address            string    `gorm:"column:address;primaryKey;size:128"`
-	NetworkCode        string    `gorm:"column:network_code;size:64;not null"`
-	LastObservedSlot   uint64    `gorm:"column:last_observed_slot;not null"`
-	LastObservedTxCode string    `gorm:"column:last_observed_tx_code;size:128;not null"`
-	SubscriptionStatus string    `gorm:"column:subscription_status;size:32;not null"`
-	CreatedAt          time.Time `gorm:"column:created_at;autoCreateTime"`
-	UpdatedAt          time.Time `gorm:"column:updated_at;autoUpdateTime"`
+	Address                string    `gorm:"column:address;primaryKey;size:128"`
+	NetworkCode            string    `gorm:"column:network_code;size:64;not null"`
+	LastObservedSlot       uint64    `gorm:"column:last_observed_slot;not null"`
+	LastObservedTxCode     string    `gorm:"column:last_observed_tx_code;size:128;not null"`
+	TrackedAccountsJSON    string    `gorm:"column:tracked_accounts_json;type:longtext"`
+	AccountCheckpointsJSON string    `gorm:"column:account_checkpoints_json;type:longtext"`
+	SubscriptionStatus     string    `gorm:"column:subscription_status;size:32;not null"`
+	CreatedAt              time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt              time.Time `gorm:"column:updated_at;autoUpdateTime"`
 }
 
 func (addressSubscriptionModel) TableName() string { return "connector_address_subscriptions" }
@@ -129,12 +132,30 @@ func (s *mySQLSubscriptionStore) Load(ctx context.Context) (*models.Subscription
 		if status == "" {
 			status = models.TxSubscriptionStatusActive
 		}
+		trackedAccounts := make([]string, 0)
+		if row.TrackedAccountsJSON != "" {
+			if err := json.Unmarshal([]byte(row.TrackedAccountsJSON), &trackedAccounts); err != nil {
+				return nil, err
+			}
+		}
+		accountCheckpoints := make(map[string]models.AddressCheckpoint)
+		if row.AccountCheckpointsJSON != "" {
+			if err := json.Unmarshal([]byte(row.AccountCheckpointsJSON), &accountCheckpoints); err != nil {
+				return nil, err
+			}
+		}
+		if len(accountCheckpoints) == 0 && (row.LastObservedSlot > 0 || row.LastObservedTxCode != "") {
+			accountCheckpoints[row.Address] = models.AddressCheckpoint{
+				LastObservedSlot:   row.LastObservedSlot,
+				LastObservedTxCode: row.LastObservedTxCode,
+			}
+		}
 		sub := &models.AddressSubscription{
 			CreatedAt:          row.CreatedAt,
 			Address:            row.Address,
 			NetworkCode:        row.NetworkCode,
-			LastObservedSlot:   row.LastObservedSlot,
-			LastObservedTxCode: row.LastObservedTxCode,
+			TrackedAccounts:    trackedAccounts,
+			AccountCheckpoints: accountCheckpoints,
 			SubscriptionStatus: status,
 		}
 		snapshot.AddressSubs[sub.Address] = sub
@@ -187,18 +208,29 @@ func (s *mySQLSubscriptionStore) UpdateTxSubscriptionStatus(ctx context.Context,
 }
 
 func (s *mySQLSubscriptionStore) SaveAddressSubscription(ctx context.Context, sub *models.AddressSubscription) error {
+	trackedAccountsJSON, err := json.Marshal(sub.TrackedAccounts)
+	if err != nil {
+		return err
+	}
+	accountCheckpointsJSON, err := json.Marshal(sub.AccountCheckpoints)
+	if err != nil {
+		return err
+	}
+	legacySlot, legacyTxCode := addressSubscriptionLegacyCheckpoint(sub)
 	model := addressSubscriptionModel{
-		Address:            sub.Address,
-		NetworkCode:        sub.NetworkCode,
-		LastObservedSlot:   sub.LastObservedSlot,
-		LastObservedTxCode: sub.LastObservedTxCode,
-		SubscriptionStatus: sub.SubscriptionStatus,
-		CreatedAt:          sub.CreatedAt,
+		Address:                sub.Address,
+		NetworkCode:            sub.NetworkCode,
+		LastObservedSlot:       legacySlot,
+		LastObservedTxCode:     legacyTxCode,
+		TrackedAccountsJSON:    string(trackedAccountsJSON),
+		AccountCheckpointsJSON: string(accountCheckpointsJSON),
+		SubscriptionStatus:     sub.SubscriptionStatus,
+		CreatedAt:              sub.CreatedAt,
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
 		Columns: []clause.Column{{Name: "address"}},
 		DoUpdates: clause.AssignmentColumns([]string{
-			"network_code", "last_observed_slot", "last_observed_tx_code", "subscription_status", "updated_at",
+			"network_code", "last_observed_slot", "last_observed_tx_code", "tracked_accounts_json", "account_checkpoints_json", "subscription_status", "updated_at",
 		}),
 	}).Create(&model).Error
 }
@@ -226,4 +258,34 @@ func (s *mySQLSubscriptionStore) SavePublishedState(ctx context.Context, txCode 
 			"network_code", "block_number", "state", "updated_at",
 		}),
 	}).Create(&model).Error
+}
+
+func addressSubscriptionLegacyCheckpoint(sub *models.AddressSubscription) (uint64, string) {
+	var latestSlot uint64
+	latestTxCode := ""
+	for _, account := range sub.TrackedAccounts {
+		checkpoint, ok := sub.AccountCheckpoints[account]
+		if !ok {
+			continue
+		}
+		if checkpoint.LastObservedSlot > latestSlot {
+			latestSlot = checkpoint.LastObservedSlot
+			latestTxCode = checkpoint.LastObservedTxCode
+		}
+	}
+	if latestSlot == 0 {
+		for account, checkpoint := range sub.AccountCheckpoints {
+			if checkpoint.LastObservedSlot > latestSlot {
+				latestSlot = checkpoint.LastObservedSlot
+				latestTxCode = checkpoint.LastObservedTxCode
+			}
+			if latestSlot == 0 && latestTxCode == "" {
+				latestTxCode = checkpoint.LastObservedTxCode
+			}
+			if latestTxCode == "" && account != "" {
+				latestTxCode = checkpoint.LastObservedTxCode
+			}
+		}
+	}
+	return latestSlot, latestTxCode
 }

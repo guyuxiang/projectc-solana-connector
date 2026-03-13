@@ -37,7 +37,7 @@ type ChainService interface {
 	CheckSignatureLive(ctx context.Context, txCode string) (bool, error)
 	GetSignatureStatus(ctx context.Context, txCode string) (*solana.SignatureStatus, error)
 	WatchSignature(ctx context.Context, txCode string) (*solana.SignatureNotification, error)
-	WatchProgramLogs(ctx context.Context, program string, onSubscribed func() error, handler func(solana.LogsNotification) error) error
+	WatchAccount(ctx context.Context, account string, onSubscribed func() error, handler func(solana.AccountNotification) error) error
 }
 
 func NewChainService(cfg *config.Config, tokenStore store.TokenStore) ChainService {
@@ -530,12 +530,12 @@ func (s *chainService) WatchSignature(ctx context.Context, txCode string) (*sola
 	return client.WaitSignatureNotification(ctx, txCode, "confirmed")
 }
 
-func (s *chainService) WatchProgramLogs(ctx context.Context, program string, onSubscribed func() error, handler func(solana.LogsNotification) error) error {
+func (s *chainService) WatchAccount(ctx context.Context, account string, onSubscribed func() error, handler func(solana.AccountNotification) error) error {
 	client, err := s.resolveWSClient()
 	if err != nil {
 		return err
 	}
-	return client.StreamLogsNotifications(ctx, program, "confirmed", onSubscribed, handler)
+	return client.StreamAccountNotifications(ctx, account, "confirmed", onSubscribed, handler)
 }
 
 func (s *chainService) resolveClient() (*solana.Client, error) {

@@ -3,6 +3,7 @@ package service
 import (
 	"context"
 	"fmt"
+	"sort"
 	"sync"
 	"time"
 
@@ -90,13 +91,14 @@ func (s *subscriptionService) RegisterAddressSubscription(req models.AddressSubs
 			CreatedAt:          time.Now(),
 			NetworkCode:        s.chainNetworkCode(),
 			Address:            req.Address,
-			LastObservedSlot:   0,
-			LastObservedTxCode: "",
+			TrackedAccounts:    nil,
+			AccountCheckpoints: make(map[string]models.AddressCheckpoint),
 			SubscriptionStatus: models.TxSubscriptionStatusActive,
 		}
 	} else {
 		sub.SubscriptionStatus = models.TxSubscriptionStatusActive
 	}
+	s.reconcileAddressTargetsLocked(sub)
 	toSave := cloneAddressSub(sub)
 	s.addressSubs[req.Address] = cloneAddressSub(sub)
 	s.startAddressWatcherLocked(req.Address)
@@ -159,6 +161,7 @@ func (s *subscriptionService) poll(ctx context.Context) {
 	}
 	s.pollTxSubscriptions(ctx, latest.BlockNumber)
 	s.pollTrackedTransactions(ctx, latest.BlockNumber)
+	s.pollAddressSubscriptions()
 }
 
 func (s *subscriptionService) pollTxSubscriptions(ctx context.Context, latestBlock uint64) {
@@ -338,23 +341,45 @@ func (s *subscriptionService) runTxWatcher(ctx context.Context, txCode string) {
 }
 
 func (s *subscriptionService) runAddressWatcher(ctx context.Context, address string) {
+	sub := s.getAddressSub(address)
+	if sub == nil {
+		return
+	}
+	if len(sub.TrackedAccounts) == 0 {
+		log.Warningf("address watcher has no tracked token accounts network=%s address=%s", s.chainNetworkCode(), address)
+		<-ctx.Done()
+		return
+	}
+	if err := s.backfillAddressAccounts(address, nil); err != nil {
+		log.Warningf("address backfill failed network=%s address=%s err=%v", s.chainNetworkCode(), address, err)
+	}
+
+	var wg sync.WaitGroup
+	for _, account := range sub.TrackedAccounts {
+		wg.Add(1)
+		go func(trackedAccount string) {
+			defer wg.Done()
+			s.runTrackedAccountWatcher(ctx, address, trackedAccount)
+		}(account)
+	}
+	wg.Wait()
+}
+
+func (s *subscriptionService) runTrackedAccountWatcher(ctx context.Context, address string, account string) {
 	for {
 		if ctx.Err() != nil {
 			return
 		}
-		if err := s.backfillProgramGap(address); err != nil {
-			log.Warningf("program backfill failed network=%s program=%s err=%v", s.chainNetworkCode(), address, err)
-		}
-		err := s.chain.WatchProgramLogs(ctx, address, func() error {
-			return s.backfillProgramGap(address)
-		}, func(notification solana.LogsNotification) error {
-			return s.handleProgramNotification(address, notification)
+		err := s.chain.WatchAccount(ctx, account, func() error {
+			return s.backfillAddressAccounts(address, []string{account})
+		}, func(notification solana.AccountNotification) error {
+			return s.handleAccountNotification(address, notification)
 		})
 		if err != nil {
 			if ctx.Err() != nil {
 				return
 			}
-			log.Warningf("ws program watcher failed network=%s program=%s err=%v", s.chainNetworkCode(), address, err)
+			log.Warningf("ws account watcher failed network=%s address=%s account=%s err=%v", s.chainNetworkCode(), address, account, err)
 			if !sleepWithContext(ctx, time.Duration(defaultRetryBackoffMs)*time.Millisecond) {
 				return
 			}
@@ -364,113 +389,109 @@ func (s *subscriptionService) runAddressWatcher(ctx context.Context, address str
 	}
 }
 
-func (s *subscriptionService) handleProgramNotification(address string, notification solana.LogsNotification) error {
-	s.mu.RLock()
-	sub, ok := s.addressSubs[address]
-	if !ok {
-		s.mu.RUnlock()
-		return nil
-	}
-	sub = cloneAddressSub(sub)
-	s.mu.RUnlock()
-
-	ctx, cancel := context.WithTimeout(context.Background(), time.Duration(defaultBackfillTimeoutMs)*time.Millisecond)
-	defer cancel()
-	resp, err := s.chain.QueryTransaction(ctx, notification.Signature)
-	if err != nil {
-		return err
-	}
-	if resp != nil && resp.Tx != nil {
-		if err := s.transitionTxState(notification.Signature, models.TxStateConfirmed, resp.Tx, resp.TxEvents, notification.Slot); err != nil {
-			return err
-		}
-	}
-
-	if notification.Slot > sub.LastObservedSlot {
-		sub.LastObservedSlot = notification.Slot
-	}
-	sub.LastObservedTxCode = notification.Signature
-	return s.persistAddressSnapshot(sub)
+func (s *subscriptionService) handleAccountNotification(address string, notification solana.AccountNotification) error {
+	return s.backfillAddressAccounts(address, []string{notification.Pubkey})
 }
 
-// backfillProgramGap 是在补 program 订阅断连窗口里漏掉的交易。
-// 在 address-subscribe 的 WS watcher 启动或重连前，按 lastObservedSlot 到当前最新 slot 的区间，把这段时间里属于该 programId 的交易重新
-//
-//	扫一遍，避免 WS 断开期间漏消息。
-func (s *subscriptionService) backfillProgramGap(address string) error {
-	s.mu.RLock()
-	// 读取当前 program 订阅快照
-	sub, ok := s.addressSubs[address]
-	if !ok {
-		s.mu.RUnlock()
+func (s *subscriptionService) backfillAddressAccounts(address string, accounts []string) error {
+	sub := s.getAddressSub(address)
+	if sub == nil {
 		return nil
 	}
-	sub = cloneAddressSub(sub)
-	s.mu.RUnlock()
+	if len(sub.TrackedAccounts) == 0 {
+		return nil
+	}
 
 	ctx := context.Background()
-
-	// 获取当前最新 slot
 	latest, err := s.chain.GetLatestBlock(ctx)
 	if err != nil {
 		return err
 	}
 
-	// 还没有 checkpoint 时，不回扫历史，直接从当前链头开始跟踪未来。
-	if sub.LastObservedSlot == 0 || sub.LastObservedTxCode == "" {
-		sub.LastObservedSlot = latest.BlockNumber
-		sub.LastObservedTxCode = ""
+	targetAccounts := accounts
+	if len(targetAccounts) == 0 {
+		targetAccounts = append([]string(nil), sub.TrackedAccounts...)
+	}
+	checkpointsChanged := false
+	for _, account := range targetAccounts {
+		checkpoint, ok := sub.AccountCheckpoints[account]
+		if !ok {
+			sub.AccountCheckpoints[account] = models.AddressCheckpoint{}
+			checkpointsChanged = true
+			continue
+		}
+		if checkpoint.LastObservedSlot == 0 && checkpoint.LastObservedTxCode == "" {
+			sub.AccountCheckpoints[account] = models.AddressCheckpoint{LastObservedSlot: latest.BlockNumber}
+			checkpointsChanged = true
+		}
+	}
+	if checkpointsChanged {
 		return s.persistAddressSnapshot(sub)
 	}
-	if latest.BlockNumber <= sub.LastObservedSlot {
-		return nil
-	}
-
-	log.Infof("backfillProgramGap %s : %d ===== %d ", address, sub.LastObservedSlot, latest.BlockNumber)
 
 	const pageLimit = 1000
-	before := ""
-	until := sub.LastObservedTxCode
-	minContextSlot := sub.LastObservedSlot
-	seenNewest := false
-	collected := make([]solana.SignatureInfo, 0, pageLimit)
-
-	for {
-		signatures, err := s.chain.FetchAddressSignatures(ctx, address, solana.SignatureQueryOptions{
-			Limit:          pageLimit,
-			Before:         before,
-			Until:          until,
-			MinContextSlot: minContextSlot,
-		})
-		if err != nil {
-			return err
+	collected := make(map[string]solana.SignatureInfo)
+	updatedCheckpoints := make(map[string]models.AddressCheckpoint, len(targetAccounts))
+	for _, account := range targetAccounts {
+		checkpoint := sub.AccountCheckpoints[account]
+		if latest.BlockNumber <= checkpoint.LastObservedSlot {
+			updatedCheckpoints[account] = checkpoint
+			continue
 		}
-		if len(signatures) == 0 {
-			break
-		}
-		for _, sig := range signatures {
-			if sig.Slot <= sub.LastObservedSlot {
-				continue
+		before := ""
+		newestCheckpoint := checkpoint
+		for {
+			signatures, err := s.chain.FetchAddressSignatures(ctx, account, solana.SignatureQueryOptions{
+				Limit:          pageLimit,
+				Before:         before,
+				Until:          checkpoint.LastObservedTxCode,
+				MinContextSlot: checkpoint.LastObservedSlot,
+			})
+			if err != nil {
+				return err
 			}
-			collected = append(collected, sig)
-			seenNewest = true
+			if len(signatures) == 0 {
+				break
+			}
+			for _, sig := range signatures {
+				if sig.Slot <= checkpoint.LastObservedSlot {
+					continue
+				}
+				if newestCheckpoint.LastObservedSlot < sig.Slot {
+					newestCheckpoint = models.AddressCheckpoint{
+						LastObservedSlot:   sig.Slot,
+						LastObservedTxCode: sig.Signature,
+					}
+				}
+				if existing, ok := collected[sig.Signature]; !ok || sig.Slot > existing.Slot {
+					collected[sig.Signature] = sig
+				}
+			}
+			if len(signatures) < pageLimit {
+				break
+			}
+			before = signatures[len(signatures)-1].Signature
+			if before == "" {
+				break
+			}
 		}
-		if len(signatures) < pageLimit {
-			break
+		if newestCheckpoint == checkpoint && latest.BlockNumber > newestCheckpoint.LastObservedSlot {
+			newestCheckpoint.LastObservedSlot = latest.BlockNumber
 		}
-		before = signatures[len(signatures)-1].Signature
-		if before == "" {
-			break
-		}
+		updatedCheckpoints[account] = newestCheckpoint
 	}
 
-	if !seenNewest {
-		sub.LastObservedSlot = latest.BlockNumber
-		return s.persistAddressSnapshot(sub)
+	ordered := make([]solana.SignatureInfo, 0, len(collected))
+	for _, sig := range collected {
+		ordered = append(ordered, sig)
 	}
-
-	for i := len(collected) - 1; i >= 0; i-- {
-		sig := collected[i]
+	sort.Slice(ordered, func(i, j int) bool {
+		if ordered[i].Slot == ordered[j].Slot {
+			return ordered[i].Signature < ordered[j].Signature
+		}
+		return ordered[i].Slot < ordered[j].Slot
+	})
+	for _, sig := range ordered {
 		resp, err := s.chain.QueryTransaction(ctx, sig.Signature)
 		if err != nil {
 			return err
@@ -480,13 +501,9 @@ func (s *subscriptionService) backfillProgramGap(address string) error {
 				return err
 			}
 		}
-		if sig.Slot > sub.LastObservedSlot {
-			sub.LastObservedSlot = sig.Slot
-			sub.LastObservedTxCode = sig.Signature
-		}
 	}
-	if latest.BlockNumber > sub.LastObservedSlot {
-		sub.LastObservedSlot = latest.BlockNumber
+	for account, checkpoint := range updatedCheckpoints {
+		sub.AccountCheckpoints[account] = checkpoint
 	}
 	return s.persistAddressSnapshot(sub)
 }
@@ -622,7 +639,127 @@ func cloneAddressSub(sub *models.AddressSubscription) *models.AddressSubscriptio
 		return nil
 	}
 	copy := *sub
+	if sub.TrackedAccounts != nil {
+		copy.TrackedAccounts = append([]string(nil), sub.TrackedAccounts...)
+	}
+	if sub.AccountCheckpoints != nil {
+		copy.AccountCheckpoints = make(map[string]models.AddressCheckpoint, len(sub.AccountCheckpoints))
+		for account, checkpoint := range sub.AccountCheckpoints {
+			copy.AccountCheckpoints[account] = checkpoint
+		}
+	}
 	return &copy
+}
+
+func (s *subscriptionService) pollAddressSubscriptions() {
+	s.mu.RLock()
+	addresses := make([]string, 0, len(s.addressSubs))
+	for address := range s.addressSubs {
+		addresses = append(addresses, address)
+	}
+	s.mu.RUnlock()
+
+	for _, address := range addresses {
+		if err := s.refreshAddressSubscription(address); err != nil {
+			log.Warningf("refresh address subscription failed network=%s address=%s err=%v", s.chainNetworkCode(), address, err)
+			continue
+		}
+		if err := s.backfillAddressAccounts(address, nil); err != nil {
+			log.Warningf("poll address subscription failed network=%s address=%s err=%v", s.chainNetworkCode(), address, err)
+		}
+	}
+}
+
+func (s *subscriptionService) refreshAddressSubscription(address string) error {
+	s.mu.Lock()
+	sub, ok := s.addressSubs[address]
+	if !ok {
+		s.mu.Unlock()
+		return nil
+	}
+	before := cloneAddressSub(sub)
+	s.reconcileAddressTargetsLocked(sub)
+	after := cloneAddressSub(sub)
+	restart := !sameStrings(before.TrackedAccounts, after.TrackedAccounts)
+	s.addressSubs[address] = cloneAddressSub(sub)
+	if restart {
+		if cancel, ok := s.addressWatchers[address]; ok {
+			cancel()
+			delete(s.addressWatchers, address)
+		}
+		s.startAddressWatcherLocked(address)
+	}
+	s.mu.Unlock()
+
+	return s.store.SaveAddressSubscription(context.Background(), after)
+}
+
+func (s *subscriptionService) reconcileAddressTargetsLocked(sub *models.AddressSubscription) {
+	if sub.AccountCheckpoints == nil {
+		sub.AccountCheckpoints = make(map[string]models.AddressCheckpoint)
+	}
+	trackedAccounts := s.deriveTrackedTokenAccounts(sub.Address)
+	current := make(map[string]struct{}, len(trackedAccounts))
+	for _, account := range trackedAccounts {
+		current[account] = struct{}{}
+		if _, ok := sub.AccountCheckpoints[account]; !ok {
+			sub.AccountCheckpoints[account] = models.AddressCheckpoint{}
+		}
+	}
+	for account := range sub.AccountCheckpoints {
+		if _, ok := current[account]; !ok {
+			delete(sub.AccountCheckpoints, account)
+		}
+	}
+	sub.TrackedAccounts = trackedAccounts
+}
+
+func (s *subscriptionService) deriveTrackedTokenAccounts(address string) []string {
+	accounts := make([]string, 0)
+	seen := make(map[string]struct{})
+	for _, token := range s.cfg.Tokens {
+		if token == nil || token.MintAddress == "" {
+			continue
+		}
+		if token.NetworkCode != "" && token.NetworkCode != s.chainNetworkCode() {
+			continue
+		}
+		for _, programID := range []string{solana.TokenProgramID, solana.Token2022ProgramID} {
+			account, err := solana.DeriveAssociatedTokenAddress(address, token.MintAddress, programID)
+			if err != nil {
+				continue
+			}
+			if _, ok := seen[account]; ok {
+				continue
+			}
+			seen[account] = struct{}{}
+			accounts = append(accounts, account)
+		}
+	}
+	sort.Strings(accounts)
+	return accounts
+}
+
+func (s *subscriptionService) getAddressSub(address string) *models.AddressSubscription {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
+	sub, ok := s.addressSubs[address]
+	if !ok {
+		return nil
+	}
+	return cloneAddressSub(sub)
+}
+
+func sameStrings(left []string, right []string) bool {
+	if len(left) != len(right) {
+		return false
+	}
+	for i := range left {
+		if left[i] != right[i] {
+			return false
+		}
+	}
+	return true
 }
 
 func shouldTransition(current string, target string) bool {
