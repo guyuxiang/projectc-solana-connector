@@ -16,7 +16,7 @@ import (
 // @description This is a projectc-solana-connector.
 // @contact.name guyuxiang
 // @contact.url https://guyuxiang.github.io
-// @contact.email guyuxiang@qq.com
+// @contact.email gu_yuxiang@qq.com
 // @license.name Apache 2.0
 // @license.url http://www.apache.org/licenses/LICENSE-2.0.html
 // @BasePath /api/v1
