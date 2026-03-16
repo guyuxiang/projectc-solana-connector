@@ -35,6 +35,13 @@ networks:
     chainId: "devnet"
     nativeSymbol: "SOL"
     lamportsPerToken: 1000000000
+    # Env override keys:
+    # NETWORKS_SOLANA_ENDPOINTS
+    # NETWORKS_SOLANA_WSENDPOINTS
+    #
+    # Supported env formats:
+    # 1. comma-separated: https://rpc1,https://rpc2
+    # 2. JSON array: ["https://rpc1","https://rpc2"]
     endpoints:
       - "https://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
     wsEndpoints:

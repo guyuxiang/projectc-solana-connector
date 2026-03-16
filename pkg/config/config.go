@@ -1,6 +1,7 @@
 package config
 
 import (
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"os"
@@ -61,6 +62,8 @@ func init() {
 	if err != nil {
 		fmt.Fprintf(os.Stderr, "unable to decode into struct, %v\n", err)
 	}
+	normalizeConfig(&c)
+	applyEnvOverrides(&c, os.Environ())
 	normalizeConfig(&c)
 }
 
@@ -152,6 +155,90 @@ func normalizeConfig(c *Config) {
 			network.LamportsPerToken = 1_000_000_000
 		}
 	}
+}
+
+func applyEnvOverrides(c *Config, envs []string) {
+	applyNetworkEndpointEnvOverrides(c, envs)
+}
+
+func applyNetworkEndpointEnvOverrides(c *Config, envs []string) {
+	if c.Networks == nil {
+		c.Networks = make(map[string]*SolanaNetwork)
+	}
+
+	for _, env := range envs {
+		key, value, ok := strings.Cut(env, "=")
+		if !ok || value == "" || !strings.HasPrefix(key, "NETWORKS_") {
+			continue
+		}
+
+		networkCode, field := parseNetworkEnvKey(key)
+		if networkCode == "" || field == "" {
+			continue
+		}
+
+		endpoints := parseStringListEnv(value)
+		if len(endpoints) == 0 {
+			continue
+		}
+
+		network := c.Networks[networkCode]
+		if network == nil {
+			network = &SolanaNetwork{}
+			c.Networks[networkCode] = network
+		}
+
+		switch field {
+		case "endpoints":
+			network.Endpoints = endpoints
+		case "wsEndpoints":
+			network.WsEndpoints = endpoints
+		}
+	}
+}
+
+func parseNetworkEnvKey(key string) (string, string) {
+	const prefix = "NETWORKS_"
+	trimmed := strings.TrimPrefix(key, prefix)
+
+	switch {
+	case strings.HasSuffix(trimmed, "_WS_ENDPOINTS"):
+		return strings.ToLower(strings.TrimSuffix(trimmed, "_WS_ENDPOINTS")), "wsEndpoints"
+	case strings.HasSuffix(trimmed, "_WSENDPOINTS"):
+		return strings.ToLower(strings.TrimSuffix(trimmed, "_WSENDPOINTS")), "wsEndpoints"
+	case strings.HasSuffix(trimmed, "_ENDPOINTS"):
+		return strings.ToLower(strings.TrimSuffix(trimmed, "_ENDPOINTS")), "endpoints"
+	default:
+		return "", ""
+	}
+}
+
+func parseStringListEnv(value string) []string {
+	trimmed := strings.TrimSpace(value)
+	if trimmed == "" {
+		return nil
+	}
+
+	if strings.HasPrefix(trimmed, "[") {
+		var items []string
+		if err := json.Unmarshal([]byte(trimmed), &items); err == nil {
+			return cleanStringList(items)
+		}
+	}
+
+	return cleanStringList(strings.Split(trimmed, ","))
+}
+
+func cleanStringList(items []string) []string {
+	cleaned := make([]string, 0, len(items))
+	for _, item := range items {
+		item = strings.TrimSpace(item)
+		if item == "" {
+			continue
+		}
+		cleaned = append(cleaned, item)
+	}
+	return cleaned
 }
 
 func buildAMQPURL(cfg *CallbackConfig) string {
