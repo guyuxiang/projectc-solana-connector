@@ -8,7 +8,7 @@ import (
 )
 
 const (
-	associatedTokenProgramID = "ATokenGPvbdGVxr1cW5xWH25efTNsLJA8knL"
+	associatedTokenProgramID = "ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL"
 	tokenProgramID           = "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA"
 	token2022ProgramID       = "TokenzQdBNbLqP5VEhdkAS6EPFLC1PHnBqCXEpPxuEb"
 	TokenProgramID           = tokenProgramID
