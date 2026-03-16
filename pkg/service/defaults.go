@@ -5,7 +5,7 @@ const (
 	defaultRequestTimeoutMs      = 15000
 	defaultBackfillTimeoutMs     = 30000
 	defaultRetryTimes            = 2
-	defaultRetryBackoffMs        = 300
+	defaultRetryBackoffMs        = 3000
 	defaultWSIdleTimeoutMs       = 90000
 	defaultIdempotencyTTLSeconds = 3600
 	defaultTxCallbackExchange    = "tx_callback_fanout_exchange"
