@@ -38,7 +38,7 @@ type Connector struct {
 
 type CallbackConfig struct {
 	Mode              string `yaml:"mode"`
-	HTTPURL           string `yaml:"http-url"`
+	HTTPURL           string `yaml:"httpurl"`
 	URL               string `yaml:"url"`
 	Host              string `yaml:"host"`
 	Port              int    `yaml:"port"`
