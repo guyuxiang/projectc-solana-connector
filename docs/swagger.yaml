@@ -7,6 +7,13 @@ definitions:
     required:
     - address
     type: object
+  models.AddressBalanceResponse:
+    properties:
+      balance:
+        type: number
+      balanceUnit:
+        type: string
+    type: object
   models.AddressSubscribeCancelRequest:
     properties:
       address:
@@ -20,6 +27,41 @@ definitions:
         type: string
     required:
     - address
+    type: object
+  models.ChainEvent:
+    properties:
+      blockNumber:
+        type: integer
+      code:
+        type: string
+      data: {}
+      networkCode:
+        type: string
+      timestamp:
+        type: integer
+      type:
+        type: string
+    type: object
+  models.ChainTx:
+    properties:
+      amount:
+        type: string
+      blockNumber:
+        type: integer
+      code:
+        type: string
+      fee:
+        type: string
+      from:
+        type: string
+      networkCode:
+        type: string
+      status:
+        type: string
+      timestamp:
+        type: integer
+      to:
+        type: string
     type: object
   models.ErrorResponse:
     properties:
@@ -40,6 +82,13 @@ definitions:
     - acceptAddress
     - idempotencyKey
     - value
+    type: object
+  models.LatestBlockResponse:
+    properties:
+      blockNumber:
+        type: integer
+      timestamp:
+        type: integer
     type: object
   models.Response:
     properties:
@@ -82,6 +131,11 @@ definitions:
     - address
     - tokenCode
     type: object
+  models.TokenBalanceResponse:
+    properties:
+      value:
+        type: number
+    type: object
   models.TokenDeleteRequest:
     properties:
       code:
@@ -101,12 +155,35 @@ definitions:
       networkCode:
         type: string
     type: object
+  models.TokenListResponse:
+    properties:
+      tokens:
+        items:
+          $ref: '#/definitions/models.TokenResponse'
+        type: array
+    type: object
+  models.TokenResponse:
+    properties:
+      code:
+        type: string
+      decimals:
+        type: integer
+      mintAddress:
+        type: string
+      networkCode:
+        type: string
+    type: object
   models.TokenSupplyRequest:
     properties:
       tokenCode:
         type: string
     required:
     - tokenCode
+    type: object
+  models.TokenSupplyResponse:
+    properties:
+      value:
+        type: number
     type: object
   models.TxQueryRequest:
     properties:
@@ -115,12 +192,28 @@ definitions:
     required:
     - txCode
     type: object
+  models.TxQueryResponse:
+    properties:
+      ifTxOnchain:
+        type: boolean
+      tx:
+        $ref: '#/definitions/models.ChainTx'
+      txEvents:
+        items:
+          $ref: '#/definitions/models.ChainEvent'
+        type: array
+    type: object
   models.TxSendRequest:
     properties:
       txSignResult:
         type: string
     required:
     - txSignResult
+    type: object
+  models.TxSendResponse:
+    properties:
+      txCode:
+        type: string
     type: object
   models.TxSubscribeCancelRequest:
     properties:
@@ -276,7 +369,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.AddressBalanceResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -295,7 +393,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.LatestBlockResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -321,7 +424,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TokenResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -348,7 +456,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TokenBalanceResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -402,7 +515,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TokenResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -420,7 +538,6 @@ paths:
       - description: Token list request
         in: body
         name: request
-        required: true
         schema:
           $ref: '#/definitions/models.TokenListRequest'
       produces:
@@ -429,7 +546,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TokenListResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -455,7 +577,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TokenSupplyResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -482,7 +609,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TxQueryResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -509,7 +641,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TxSendResponse'
+              type: object
         "400":
           description: Bad Request
           schema:
@@ -540,7 +677,12 @@ paths:
         "200":
           description: OK
           schema:
-            $ref: '#/definitions/models.Response'
+            allOf:
+            - $ref: '#/definitions/models.Response'
+            - properties:
+                data:
+                  $ref: '#/definitions/models.TxSendResponse'
+              type: object
         "400":
           description: Bad Request
           schema:

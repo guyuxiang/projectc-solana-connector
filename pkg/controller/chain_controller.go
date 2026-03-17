@@ -48,7 +48,7 @@ type chainController struct {
 // @Accept json
 // @Produce json
 // @Param request body models.TxSendRequest true "Signed transaction payload"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.TxSendResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
 // @Router /inner/chain-invoke/solana/common/tx-send [post]
@@ -76,7 +76,7 @@ func (cc *chainController) TxSend(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body models.FaucetRequest true "Faucet request"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.TxSendResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Failure 500 {object} models.ErrorResponse
 // @Router /inner/chain-invoke/solana/wallet/faucet [post]
@@ -104,7 +104,7 @@ func (cc *chainController) Faucet(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body models.TxQueryRequest true "Transaction query request"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.TxQueryResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/tx-query [post]
 func (cc *chainController) TxQuery(c *gin.Context) {
@@ -127,7 +127,7 @@ func (cc *chainController) TxQuery(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body models.AddressBalanceRequest true "Address balance request"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.AddressBalanceResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/address-balance [post]
 func (cc *chainController) AddressBalance(c *gin.Context) {
@@ -150,7 +150,7 @@ func (cc *chainController) AddressBalance(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body models.TokenSupplyRequest true "Token supply request"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.TokenSupplyResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/token-supply [post]
 func (cc *chainController) TokenSupply(c *gin.Context) {
@@ -173,7 +173,7 @@ func (cc *chainController) TokenSupply(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body models.TokenBalanceRequest true "Token balance request"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.TokenBalanceResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/token-balance [post]
 func (cc *chainController) TokenBalance(c *gin.Context) {
@@ -196,7 +196,7 @@ func (cc *chainController) TokenBalance(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body models.TokenAddRequest true "Token add request"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.TokenResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/token-add [post]
 func (cc *chainController) TokenAdd(c *gin.Context) {
@@ -219,7 +219,7 @@ func (cc *chainController) TokenAdd(c *gin.Context) {
 // @Accept json
 // @Produce json
 // @Param request body models.TokenGetRequest true "Token get request"
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.TokenResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/token-get [post]
 func (cc *chainController) TokenGet(c *gin.Context) {
@@ -241,8 +241,8 @@ func (cc *chainController) TokenGet(c *gin.Context) {
 // @Tags Solana
 // @Accept json
 // @Produce json
-// @Param request body models.TokenListRequest true "Token list request"
-// @Success 200 {object} models.Response
+// @Param request body models.TokenListRequest false "Token list request"
+// @Success 200 {object} models.Response{data=models.TokenListResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/token-list [post]
 func (cc *chainController) TokenList(c *gin.Context) {
@@ -288,7 +288,7 @@ func (cc *chainController) TokenDelete(c *gin.Context) {
 // @Tags Solana
 // @Accept json
 // @Produce json
-// @Success 200 {object} models.Response
+// @Success 200 {object} models.Response{data=models.LatestBlockResponse}
 // @Failure 400 {object} models.ErrorResponse
 // @Router /inner/chain-data/solana/common/latest-block [post]
 func (cc *chainController) LatestBlock(c *gin.Context) {

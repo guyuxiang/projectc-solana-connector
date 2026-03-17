@@ -43,7 +43,6 @@ func InstallRoutes(r *gin.Engine) {
 	rootGroup := r.Group("/api/v1")
 	rootGroup.GET("/ping", controller.Ping)
 
-	registerChainRoutes(r, chainController)
 	registerChainRoutes(rootGroup, chainController)
 }
 

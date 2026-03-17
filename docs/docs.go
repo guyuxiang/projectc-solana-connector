@@ -211,7 +211,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.AddressBalanceResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -240,7 +252,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.LatestBlockResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -280,7 +304,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TokenResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -320,7 +356,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TokenBalanceResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -400,7 +448,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TokenResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -430,7 +490,6 @@ const docTemplate = `{
                         "description": "Token list request",
                         "name": "request",
                         "in": "body",
-                        "required": true,
                         "schema": {
                             "$ref": "#/definitions/models.TokenListRequest"
                         }
@@ -440,7 +499,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TokenListResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -480,7 +551,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TokenSupplyResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -520,7 +603,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TxQueryResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -560,7 +655,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TxSendResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -606,7 +713,19 @@ const docTemplate = `{
                     "200": {
                         "description": "OK",
                         "schema": {
-                            "$ref": "#/definitions/models.Response"
+                            "allOf": [
+                                {
+                                    "$ref": "#/definitions/models.Response"
+                                },
+                                {
+                                    "type": "object",
+                                    "properties": {
+                                        "data": {
+                                            "$ref": "#/definitions/models.TxSendResponse"
+                                        }
+                                    }
+                                }
+                            ]
                         }
                     },
                     "400": {
@@ -637,6 +756,17 @@ const docTemplate = `{
                 }
             }
         },
+        "models.AddressBalanceResponse": {
+            "type": "object",
+            "properties": {
+                "balance": {
+                    "type": "number"
+                },
+                "balanceUnit": {
+                    "type": "string"
+                }
+            }
+        },
         "models.AddressSubscribeCancelRequest": {
             "type": "object",
             "required": [
@@ -655,6 +785,59 @@ const docTemplate = `{
             ],
             "properties": {
                 "address": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ChainEvent": {
+            "type": "object",
+            "properties": {
+                "blockNumber": {
+                    "type": "integer"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "data": {},
+                "networkCode": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "integer"
+                },
+                "type": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.ChainTx": {
+            "type": "object",
+            "properties": {
+                "amount": {
+                    "type": "string"
+                },
+                "blockNumber": {
+                    "type": "integer"
+                },
+                "code": {
+                    "type": "string"
+                },
+                "fee": {
+                    "type": "string"
+                },
+                "from": {
+                    "type": "string"
+                },
+                "networkCode": {
+                    "type": "string"
+                },
+                "status": {
+                    "type": "string"
+                },
+                "timestamp": {
+                    "type": "integer"
+                },
+                "to": {
                     "type": "string"
                 }
             }
@@ -686,6 +869,17 @@ const docTemplate = `{
                 },
                 "value": {
                     "type": "number"
+                }
+            }
+        },
+        "models.LatestBlockResponse": {
+            "type": "object",
+            "properties": {
+                "blockNumber": {
+                    "type": "integer"
+                },
+                "timestamp": {
+                    "type": "integer"
                 }
             }
         },
@@ -750,6 +944,14 @@ const docTemplate = `{
                 }
             }
         },
+        "models.TokenBalanceResponse": {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "type": "number"
+                }
+            }
+        },
         "models.TokenDeleteRequest": {
             "type": "object",
             "required": [
@@ -780,6 +982,34 @@ const docTemplate = `{
                 }
             }
         },
+        "models.TokenListResponse": {
+            "type": "object",
+            "properties": {
+                "tokens": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.TokenResponse"
+                    }
+                }
+            }
+        },
+        "models.TokenResponse": {
+            "type": "object",
+            "properties": {
+                "code": {
+                    "type": "string"
+                },
+                "decimals": {
+                    "type": "integer"
+                },
+                "mintAddress": {
+                    "type": "string"
+                },
+                "networkCode": {
+                    "type": "string"
+                }
+            }
+        },
         "models.TokenSupplyRequest": {
             "type": "object",
             "required": [
@@ -788,6 +1018,14 @@ const docTemplate = `{
             "properties": {
                 "tokenCode": {
                     "type": "string"
+                }
+            }
+        },
+        "models.TokenSupplyResponse": {
+            "type": "object",
+            "properties": {
+                "value": {
+                    "type": "number"
                 }
             }
         },
@@ -802,6 +1040,23 @@ const docTemplate = `{
                 }
             }
         },
+        "models.TxQueryResponse": {
+            "type": "object",
+            "properties": {
+                "ifTxOnchain": {
+                    "type": "boolean"
+                },
+                "tx": {
+                    "$ref": "#/definitions/models.ChainTx"
+                },
+                "txEvents": {
+                    "type": "array",
+                    "items": {
+                        "$ref": "#/definitions/models.ChainEvent"
+                    }
+                }
+            }
+        },
         "models.TxSendRequest": {
             "type": "object",
             "required": [
@@ -809,6 +1064,14 @@ const docTemplate = `{
             ],
             "properties": {
                 "txSignResult": {
+                    "type": "string"
+                }
+            }
+        },
+        "models.TxSendResponse": {
+            "type": "object",
+            "properties": {
+                "txCode": {
                     "type": "string"
                 }
             }
