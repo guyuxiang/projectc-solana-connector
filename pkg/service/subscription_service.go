@@ -698,7 +698,7 @@ func (s *subscriptionService) reconcileAddressTargetsLocked(sub *models.AddressS
 	if sub.AccountCheckpoints == nil {
 		sub.AccountCheckpoints = make(map[string]models.AddressCheckpoint)
 	}
-	trackedAccounts := s.deriveTrackedTokenAccounts(sub.Address)
+	trackedAccounts := s.deriveTrackedAccounts(sub.Address)
 	current := make(map[string]struct{}, len(trackedAccounts))
 	for _, account := range trackedAccounts {
 		current[account] = struct{}{}
@@ -714,9 +714,13 @@ func (s *subscriptionService) reconcileAddressTargetsLocked(sub *models.AddressS
 	sub.TrackedAccounts = trackedAccounts
 }
 
-func (s *subscriptionService) deriveTrackedTokenAccounts(address string) []string {
+func (s *subscriptionService) deriveTrackedAccounts(address string) []string {
 	accounts := make([]string, 0)
 	seen := make(map[string]struct{})
+	if address != "" {
+		seen[address] = struct{}{}
+		accounts = append(accounts, address)
+	}
 	for _, token := range s.cfg.Tokens {
 		if token == nil || token.MintAddress == "" {
 			continue
