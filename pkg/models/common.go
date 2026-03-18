@@ -104,10 +104,10 @@ type TokenListRequest struct {
 }
 
 type TokenResponse struct {
-	Code        string `json:"code"`
-	NetworkCode string `json:"networkCode"`
-	MintAddress string `json:"mintAddress"`
-	Decimals    uint8  `json:"decimals"`
+	TokenCode    string `json:"tokenCode"`
+	NetworkCode  string `json:"networkCode"`
+	TokenAddress string `json:"tokenAddress"`
+	Decimals     uint8  `json:"decimals"`
 }
 
 type TokenListResponse struct {

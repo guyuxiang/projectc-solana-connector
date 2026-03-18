@@ -289,10 +289,10 @@ func (s *chainService) AddToken(ctx context.Context, req models.TokenAddRequest)
 	s.tokenMu.Unlock()
 
 	return &models.TokenResponse{
-		Code:        req.Code,
-		NetworkCode: req.NetworkCode,
-		MintAddress: req.MintAddress,
-		Decimals:    req.Decimals,
+		TokenCode:    req.Code,
+		NetworkCode:  req.NetworkCode,
+		TokenAddress: req.MintAddress,
+		Decimals:     req.Decimals,
 	}, nil
 }
 
@@ -318,10 +318,10 @@ func (s *chainService) GetToken(ctx context.Context, tokenCode string) (*models.
 	}
 
 	return &models.TokenResponse{
-		Code:        tokenCode,
-		NetworkCode: token.Networkcode,
-		MintAddress: token.Mintaddress,
-		Decimals:    token.Decimals,
+		TokenCode:    tokenCode,
+		NetworkCode:  token.Networkcode,
+		TokenAddress: token.Mintaddress,
+		Decimals:     token.Decimals,
 	}, nil
 }
 
@@ -344,10 +344,10 @@ func (s *chainService) ListTokens(ctx context.Context, req models.TokenListReque
 			continue
 		}
 		items = append(items, models.TokenResponse{
-			Code:        code,
-			NetworkCode: token.Networkcode,
-			MintAddress: token.Mintaddress,
-			Decimals:    token.Decimals,
+			TokenCode:    code,
+			NetworkCode:  token.Networkcode,
+			TokenAddress: token.Mintaddress,
+			Decimals:     token.Decimals,
 		})
 	}
 	return &models.TokenListResponse{Tokens: items}, nil
