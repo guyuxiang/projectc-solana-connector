@@ -39,15 +39,15 @@ func NewTokenStore(cfg *config.Config) (TokenStore, error) {
 	if cfg == nil {
 		return nil, errors.New("config is required")
 	}
-	return newMySQLTokenStore(cfg.MySQL)
+	return newMySQLTokenStore(cfg.Mysql)
 }
 
 func newMySQLTokenStore(cfg *config.MySQLConfig) (TokenStore, error) {
-	if cfg == nil || cfg.DSN == "" {
+	if cfg == nil || cfg.Dsn == "" {
 		return nil, errors.New("mysql.dsn is required")
 	}
 
-	db, err := gorm.Open(mysql.Open(cfg.DSN), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(cfg.Dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
@@ -56,9 +56,9 @@ func newMySQLTokenStore(cfg *config.MySQLConfig) (TokenStore, error) {
 	if err != nil {
 		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifeSec) * time.Second)
+	sqlDB.SetMaxOpenConns(cfg.Maxopenconns)
+	sqlDB.SetMaxIdleConns(cfg.Maxidleconns)
+	sqlDB.SetConnMaxLifetime(time.Duration(cfg.Connmaxlifesec) * time.Second)
 
 	store := &mySQLTokenStore{db: db}
 	if err := store.db.AutoMigrate(&tokenModel{}); err != nil {
@@ -76,8 +76,8 @@ func (s *mySQLTokenStore) Load(ctx context.Context) (map[string]*config.Token, e
 	tokens := make(map[string]*config.Token, len(rows))
 	for _, row := range rows {
 		tokens[row.Code] = &config.Token{
-			NetworkCode: row.NetworkCode,
-			MintAddress: row.MintAddress,
+			Networkcode: row.NetworkCode,
+			Mintaddress: row.MintAddress,
 			Decimals:    row.Decimals,
 		}
 	}
@@ -90,8 +90,8 @@ func (s *mySQLTokenStore) Get(ctx context.Context, code string) (*config.Token, 
 		return nil, err
 	}
 	return &config.Token{
-		NetworkCode: row.NetworkCode,
-		MintAddress: row.MintAddress,
+		Networkcode: row.NetworkCode,
+		Mintaddress: row.MintAddress,
 		Decimals:    row.Decimals,
 	}, nil
 }
@@ -110,8 +110,8 @@ func (s *mySQLTokenStore) List(ctx context.Context, networkCode string) (map[str
 	tokens := make(map[string]*config.Token, len(rows))
 	for _, row := range rows {
 		tokens[row.Code] = &config.Token{
-			NetworkCode: row.NetworkCode,
-			MintAddress: row.MintAddress,
+			Networkcode: row.NetworkCode,
+			Mintaddress: row.MintAddress,
 			Decimals:    row.Decimals,
 		}
 	}
@@ -124,8 +124,8 @@ func (s *mySQLTokenStore) Save(ctx context.Context, code string, token *config.T
 	}
 	model := tokenModel{
 		Code:        code,
-		NetworkCode: token.NetworkCode,
-		MintAddress: token.MintAddress,
+		NetworkCode: token.Networkcode,
+		MintAddress: token.Mintaddress,
 		Decimals:    token.Decimals,
 	}
 	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
@@ -152,8 +152,8 @@ func (s *mySQLTokenStore) SaveAll(ctx context.Context, tokens map[string]*config
 		}
 		models = append(models, tokenModel{
 			Code:        code,
-			NetworkCode: token.NetworkCode,
-			MintAddress: token.MintAddress,
+			NetworkCode: token.Networkcode,
+			MintAddress: token.Mintaddress,
 			Decimals:    token.Decimals,
 		})
 	}

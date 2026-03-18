@@ -147,13 +147,13 @@ func TestToChainEventsTransformsSPLTokenBusinessEvents(t *testing.T) {
 	cfg := &config.Config{
 		Tokens: map[string]*config.Token{
 			"DTT_GLUSD": {
-				NetworkCode: "solana-devnet",
-				MintAddress: "mint-address",
+				Networkcode: "solana-devnet",
+				Mintaddress: "mint-address",
 				Decimals:    2,
 			},
 		},
 	}
-	network := &config.SolanaNetwork{Code: "solana-devnet"}
+	network := &config.SolanaNetwork{Networkcode: "solana-devnet"}
 	events := toChainEvents(cfg, network, tx)
 	if len(events) != 3 {
 		t.Fatalf("unexpected events length: %+v", events)

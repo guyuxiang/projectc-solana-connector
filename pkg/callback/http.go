@@ -27,7 +27,7 @@ func newHTTPPublisher(cfg *config.CallbackConfig) CallbackPublisher {
 	username := ""
 	password := ""
 	if cfg != nil {
-		baseURL = strings.TrimRight(cfg.HTTPURL, "/")
+		baseURL = strings.TrimRight(cfg.Httpurl, "/")
 		username = cfg.Username
 		password = cfg.Password
 	}

@@ -46,15 +46,15 @@ func NewChainService(cfg *config.Config, tokenStore store.TokenStore) ChainServi
 	clients := make(map[string]*solana.Client, 1)
 	wsClients := make(map[string]*solana.WSClient, 1)
 	network := mustResolveSingleNetwork(cfg)
-	clients[network.Code] = solana.NewClient([]string{network.RPCURL}, timeout, defaultRetryTimes, backoff, defaultRPCCommitment)
+	clients[network.Networkcode] = solana.NewClient([]string{network.Rpcurl}, timeout, defaultRetryTimes, backoff, defaultRPCCommitment)
 	wsEndpoints := []string{}
-	if network.WSURL != "" {
-		wsEndpoints = []string{network.WSURL}
+	if network.Wsurl != "" {
+		wsEndpoints = []string{network.Wsurl}
 	} else {
-		wsEndpoints = solana.DeriveWSEndpoints([]string{network.RPCURL})
+		wsEndpoints = solana.DeriveWSEndpoints([]string{network.Rpcurl})
 	}
 	idleTimeout := time.Duration(defaultWSIdleTimeoutMs) * time.Millisecond
-	wsClients[network.Code] = solana.NewWSClient(wsEndpoints, timeout, idleTimeout)
+	wsClients[network.Networkcode] = solana.NewWSClient(wsEndpoints, timeout, idleTimeout)
 	return &chainService{
 		cfg:              cfg,
 		tokenStore:       tokenStore,
@@ -113,7 +113,7 @@ func (s *chainService) Faucet(ctx context.Context, req models.FaucetRequest) (st
 	if err != nil {
 		return "", err
 	}
-	if s.cfg.Wallet == nil || s.cfg.Wallet.PrivateKeyBase58 == "" {
+	if s.cfg.Wallet == nil || s.cfg.Wallet.Privatekeybase58 == "" {
 		return "", errors.New("wallet.privateKeyBase58 is required")
 	}
 
@@ -132,11 +132,11 @@ func (s *chainService) Faucet(ctx context.Context, req models.FaucetRequest) (st
 		return "", err
 	}
 
-	encodedTx, fromAddress, err := solana.BuildNativeTransferTx(s.cfg.Wallet.PrivateKeyBase58, req.AcceptAddress, latest.Value.Blockhash, lamports)
+	encodedTx, fromAddress, err := solana.BuildNativeTransferTx(s.cfg.Wallet.Privatekeybase58, req.AcceptAddress, latest.Value.Blockhash, lamports)
 	if err != nil {
 		return "", err
 	}
-	if s.cfg.Wallet.FromAddress != "" && !strings.EqualFold(s.cfg.Wallet.FromAddress, fromAddress) {
+	if s.cfg.Wallet.Fromaddress != "" && !strings.EqualFold(s.cfg.Wallet.Fromaddress, fromAddress) {
 		return "", errors.New("wallet private key does not match configured fromAddress")
 	}
 
@@ -182,7 +182,7 @@ func (s *chainService) GetAddressBalance(ctx context.Context, address string) (*
 	}
 	return &models.AddressBalanceResponse{
 		Balance:     fromLamports(resp.Value, solanaLamportsPerSOL),
-		BalanceUnit: network.NativeSymbol,
+		BalanceUnit: network.Nativesymbol,
 	}, nil
 }
 
@@ -203,7 +203,7 @@ func (s *chainService) GetTokenSupply(ctx context.Context, tokenCode string) (*m
 		} `json:"value"`
 	}
 	params := []interface{}{
-		token.MintAddress,
+		token.Mintaddress,
 		map[string]interface{}{
 			"commitment": client.Commitment(),
 		},
@@ -247,7 +247,7 @@ func (s *chainService) GetTokenBalance(ctx context.Context, tokenCode string, ad
 	params := []interface{}{
 		address,
 		map[string]interface{}{
-			"mint": token.MintAddress,
+			"mint": token.Mintaddress,
 		},
 		map[string]interface{}{
 			"encoding":   "jsonParsed",
@@ -273,8 +273,8 @@ func (s *chainService) GetTokenBalance(ctx context.Context, tokenCode string, ad
 
 func (s *chainService) AddToken(ctx context.Context, req models.TokenAddRequest) (*models.TokenResponse, error) {
 	token := &config.Token{
-		NetworkCode: req.NetworkCode,
-		MintAddress: req.MintAddress,
+		Networkcode: req.NetworkCode,
+		Mintaddress: req.MintAddress,
 		Decimals:    req.Decimals,
 	}
 	if err := s.tokenStore.Save(ctx, req.Code, token); err != nil {
@@ -319,8 +319,8 @@ func (s *chainService) GetToken(ctx context.Context, tokenCode string) (*models.
 
 	return &models.TokenResponse{
 		Code:        tokenCode,
-		NetworkCode: token.NetworkCode,
-		MintAddress: token.MintAddress,
+		NetworkCode: token.Networkcode,
+		MintAddress: token.Mintaddress,
 		Decimals:    token.Decimals,
 	}, nil
 }
@@ -345,8 +345,8 @@ func (s *chainService) ListTokens(ctx context.Context, req models.TokenListReque
 		}
 		items = append(items, models.TokenResponse{
 			Code:        code,
-			NetworkCode: token.NetworkCode,
-			MintAddress: token.MintAddress,
+			NetworkCode: token.Networkcode,
+			MintAddress: token.Mintaddress,
 			Decimals:    token.Decimals,
 		})
 	}
@@ -539,7 +539,7 @@ func (s *chainService) WatchAccount(ctx context.Context, account string, onSubsc
 }
 
 func (s *chainService) resolveClient() (*solana.Client, error) {
-	client, ok := s.clients[s.network.Code]
+	client, ok := s.clients[s.network.Networkcode]
 	if !ok {
 		return nil, fmt.Errorf("solana rpc client not initialized")
 	}
@@ -547,7 +547,7 @@ func (s *chainService) resolveClient() (*solana.Client, error) {
 }
 
 func (s *chainService) resolveWSClient() (*solana.WSClient, error) {
-	client, ok := s.wsClients[s.network.Code]
+	client, ok := s.wsClients[s.network.Networkcode]
 	if !ok {
 		return nil, fmt.Errorf("solana websocket client not initialized")
 	}
@@ -561,7 +561,7 @@ func (s *chainService) resolveToken(tokenCode string) (*config.Token, error) {
 	if !ok || token == nil {
 		return nil, fmt.Errorf("tokenCode=%s not configured", tokenCode)
 	}
-	if token.NetworkCode != "" && token.NetworkCode != s.network.Code {
+	if token.Networkcode != "" && token.Networkcode != s.network.Networkcode {
 		return nil, fmt.Errorf("tokenCode=%s does not belong to solana network", tokenCode)
 	}
 	return token, nil
@@ -609,7 +609,7 @@ func mustResolveSingleNetwork(cfg *config.Config) *config.SolanaNetwork {
 	if cfg.Networks == nil {
 		panic("solana connector network config is empty")
 	}
-	if cfg.Networks.RPCURL == "" {
+	if cfg.Networks.Rpcurl == "" {
 		panic("solana connector network endpoint is empty")
 	}
 	return cfg.Networks

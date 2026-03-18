@@ -3,7 +3,7 @@ package config
 type Config struct {
 	Server    *Server           `yaml:"server"`
 	Auth      *Auth             `yaml:"auth"`
-	MySQL     *MySQLConfig      `yaml:"mysql"`
+	Mysql     *MySQLConfig      `yaml:"mysql"`
 	Callback  *CallbackConfig   `yaml:"callback"`
 	Wallet    *WalletConfig     `yaml:"wallet"`
 	Gin       *Gin              `yaml:"gin"`
@@ -33,44 +33,43 @@ type Log struct {
 }
 
 type Connector struct {
-	PollIntervalMs    int    `yaml:"pollIntervalMs"`
-	TxSubscribeWindow uint64 `yaml:"txSubscribeWindow"`
+	Pollintervalms    int    `yaml:"pollintervalms"`
+	Txsubscribewindow uint64 `yaml:"txsubscribewindow"`
 }
 
 type CallbackConfig struct {
-	HTTPURL  string `yaml:"httpurl"`
+	Httpurl  string `yaml:"httpurl"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
 }
 
 type MySQLConfig struct {
-	DSN            string `yaml:"dsn"`
+	Dsn            string `yaml:"dsn"`
 	Username       string `yaml:"username"`
 	Password       string `yaml:"password"`
 	Host           string `yaml:"host"`
 	Port           int    `yaml:"port"`
 	Database       string `yaml:"database"`
-	MaxOpenConns   int    `yaml:"maxOpenConns"`
-	MaxOpenConnsV2 int    `yaml:"maxOpenconns"`
-	MaxIdleConns   int    `yaml:"maxIdleConns"`
-	ConnMaxLifeSec int    `yaml:"connMaxLifeSec"`
+	Maxopenconns   int    `yaml:"maxopenconns"`
+	Maxidleconns   int    `yaml:"maxidleconns"`
+	Connmaxlifesec int    `yaml:"connmaxlifesec"`
 }
 
 type SolanaNetwork struct {
-	Code         string `yaml:"networkCode"`
-	ChainID      string `yaml:"chainId"`
-	NativeSymbol string `yaml:"nativeSymbol"`
-	RPCURL       string `yaml:"rpcUrl"`
-	WSURL        string `yaml:"wsUrl"`
+	Networkcode  string `yaml:"networkcode"`
+	Chainid      string `yaml:"chainid"`
+	Nativesymbol string `yaml:"nativesymbol"`
+	Rpcurl       string `yaml:"rpcurl"`
+	Wsurl        string `yaml:"wsurl"`
 }
 
 type WalletConfig struct {
-	PrivateKeyBase58 string `yaml:"privateKeyBase58"`
-	FromAddress      string `yaml:"fromAddress"`
+	Privatekeybase58 string `yaml:"privatekeybase58"`
+	Fromaddress      string `yaml:"fromaddress"`
 }
 
 type Token struct {
-	NetworkCode string `yaml:"networkCode"`
-	MintAddress string `yaml:"mintAddress"`
+	Networkcode string `yaml:"networkcode"`
+	Mintaddress string `yaml:"mintaddress"`
 	Decimals    uint8  `yaml:"decimals"`
 }

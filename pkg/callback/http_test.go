@@ -18,7 +18,7 @@ func (f roundTripperFunc) RoundTrip(req *http.Request) (*http.Response, error) {
 
 func TestHTTPPublisherUsesBasicAuth(t *testing.T) {
 	publisher := newHTTPPublisher(&config.CallbackConfig{
-		HTTPURL:  "http://callback.example",
+		Httpurl:  "http://callback.example",
 		Username: "test",
 		Password: "test",
 	}).(*httpPublisher)

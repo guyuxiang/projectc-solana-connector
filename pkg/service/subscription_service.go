@@ -121,7 +121,7 @@ func (s *subscriptionService) CancelAddressSubscription(address string) error {
 func (s *subscriptionService) start() {
 	s.resumeWatchers()
 
-	ticker := time.NewTicker(time.Duration(s.cfg.Connector.PollIntervalMs) * time.Millisecond)
+	ticker := time.NewTicker(time.Duration(s.cfg.Connector.Pollintervalms) * time.Millisecond)
 	go func() {
 		defer ticker.Stop()
 		for range ticker.C {
@@ -700,8 +700,8 @@ func (s *subscriptionService) failPendingCallback(item *models.PendingCallback, 
 }
 
 func (s *subscriptionService) callbackRetryInterval() time.Duration {
-	if s.cfg != nil && s.cfg.Connector != nil && s.cfg.Connector.PollIntervalMs > 0 {
-		return time.Duration(s.cfg.Connector.PollIntervalMs) * time.Millisecond
+	if s.cfg != nil && s.cfg.Connector != nil && s.cfg.Connector.Pollintervalms > 0 {
+		return time.Duration(s.cfg.Connector.Pollintervalms) * time.Millisecond
 	}
 	return time.Duration(defaultRequestTimeoutMs) * time.Millisecond
 }
@@ -723,7 +723,7 @@ func (s *subscriptionService) persistAddressSnapshot(sub *models.AddressSubscrip
 
 func (s *subscriptionService) chainNetworkCode() string {
 	if chainSvc, ok := s.chain.(*chainService); ok && chainSvc.network != nil {
-		return chainSvc.network.Code
+		return chainSvc.network.Networkcode
 	}
 	return "solana"
 }
@@ -866,14 +866,14 @@ func (s *subscriptionService) deriveTrackedAccounts(address string) []string {
 		accounts = append(accounts, address)
 	}
 	for _, token := range s.cfg.Tokens {
-		if token == nil || token.MintAddress == "" {
+		if token == nil || token.Mintaddress == "" {
 			continue
 		}
-		if token.NetworkCode != "" && token.NetworkCode != s.chainNetworkCode() {
+		if token.Networkcode != "" && token.Networkcode != s.chainNetworkCode() {
 			continue
 		}
 		for _, programID := range []string{solana.TokenProgramID, solana.Token2022ProgramID} {
-			account, err := solana.DeriveAssociatedTokenAddress(address, token.MintAddress, programID)
+			account, err := solana.DeriveAssociatedTokenAddress(address, token.Mintaddress, programID)
 			if err != nil {
 				continue
 			}

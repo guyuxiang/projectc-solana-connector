@@ -427,7 +427,7 @@ func (cc *chainController) autoSubscribeTx(c *gin.Context, txCode string) error 
 	if err != nil {
 		return err
 	}
-	endBlock := latest.BlockNumber + config.GetConfig().Connector.TxSubscribeWindow
+	endBlock := latest.BlockNumber + config.GetConfig().Connector.Txsubscribewindow
 	return cc.subscription.RegisterTxSubscription(models.TxSubscribeRequest{
 		TxCode: txCode,
 		SubscribeRange: models.SubscribeRange{

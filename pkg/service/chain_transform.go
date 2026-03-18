@@ -33,7 +33,7 @@ func toChainTx(network *config.SolanaNetwork, tx solana.TransactionResult) model
 
 	return models.ChainTx{
 		Code:        signature,
-		NetworkCode: network.Code,
+		NetworkCode: network.Networkcode,
 		BlockNumber: tx.Slot,
 		Timestamp:   timestamp,
 		Status:      status,
@@ -62,7 +62,7 @@ func toChainEvents(cfg *config.Config, network *config.SolanaNetwork, tx solana.
 			if err == nil && domainEvent.Type != "" {
 				events = append(events, models.ChainEvent{
 					Code:        fmt.Sprintf("%s#%d", signature, eventIdx),
-					NetworkCode: network.Code,
+					NetworkCode: network.Networkcode,
 					BlockNumber: tx.Slot,
 					Timestamp:   timestamp,
 					Type:        domainEvent.Type,

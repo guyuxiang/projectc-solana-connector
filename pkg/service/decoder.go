@@ -179,7 +179,7 @@ func resolveTokenCode(cfg *config.Config, network *config.SolanaNetwork, mint st
 		if token == nil {
 			continue
 		}
-		if network != nil && token.NetworkCode == network.Code && strings.EqualFold(token.MintAddress, mint) {
+		if network != nil && token.Networkcode == network.Networkcode && strings.EqualFold(token.Mintaddress, mint) {
 			return tokenCode, true
 		}
 	}
@@ -213,7 +213,7 @@ func resolveTokenAmount(cfg *config.Config, network *config.SolanaNetwork, mint 
 			if token == nil {
 				continue
 			}
-			if network != nil && token.NetworkCode == network.Code && strings.EqualFold(token.MintAddress, mint) {
+			if network != nil && token.Networkcode == network.Networkcode && strings.EqualFold(token.Mintaddress, mint) {
 				decimals = token.Decimals
 				break
 			}

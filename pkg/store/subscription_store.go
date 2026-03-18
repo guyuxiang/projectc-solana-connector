@@ -25,7 +25,7 @@ type SubscriptionStore interface {
 }
 
 func NewSubscriptionStore(cfg *config.Config) (SubscriptionStore, error) {
-	return newMySQLSubscriptionStore(cfg.MySQL)
+	return newMySQLSubscriptionStore(cfg.Mysql)
 }
 
 type mySQLSubscriptionStore struct {
@@ -84,11 +84,11 @@ type pendingCallbackModel struct {
 func (pendingCallbackModel) TableName() string { return "connector_pending_callbacks" }
 
 func newMySQLSubscriptionStore(cfg *config.MySQLConfig) (SubscriptionStore, error) {
-	if cfg == nil || cfg.DSN == "" {
+	if cfg == nil || cfg.Dsn == "" {
 		return nil, errors.New("mysql.dsn is required")
 	}
 
-	db, err := gorm.Open(mysql.Open(cfg.DSN), &gorm.Config{})
+	db, err := gorm.Open(mysql.Open(cfg.Dsn), &gorm.Config{})
 	if err != nil {
 		return nil, err
 	}
@@ -97,9 +97,9 @@ func newMySQLSubscriptionStore(cfg *config.MySQLConfig) (SubscriptionStore, erro
 	if err != nil {
 		return nil, err
 	}
-	sqlDB.SetMaxOpenConns(cfg.MaxOpenConns)
-	sqlDB.SetMaxIdleConns(cfg.MaxIdleConns)
-	sqlDB.SetConnMaxLifetime(time.Duration(cfg.ConnMaxLifeSec) * time.Second)
+	sqlDB.SetMaxOpenConns(cfg.Maxopenconns)
+	sqlDB.SetMaxIdleConns(cfg.Maxidleconns)
+	sqlDB.SetConnMaxLifetime(time.Duration(cfg.Connmaxlifesec) * time.Second)
 
 	store := &mySQLSubscriptionStore{db: db}
 	if err := store.migrate(); err != nil {

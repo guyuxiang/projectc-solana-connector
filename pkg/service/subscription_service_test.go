@@ -16,17 +16,17 @@ func TestDeriveTrackedAccountsIncludesWalletAndTokenAccounts(t *testing.T) {
 		cfg: &config.Config{
 			Tokens: map[string]*config.Token{
 				"USDC": {
-					NetworkCode: "solana",
-					MintAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+					Networkcode: "solana",
+					Mintaddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 				},
 				"OTHER": {
-					NetworkCode: "other",
-					MintAddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
+					Networkcode: "other",
+					Mintaddress: "EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwyTDt1v",
 				},
 			},
 		},
 		chain: &chainService{
-			network: &config.SolanaNetwork{Code: "solana"},
+			network: &config.SolanaNetwork{Networkcode: "solana"},
 		},
 	}
 
@@ -120,7 +120,7 @@ func TestTransitionTxStatePersistsFailedCallbackAndRetries(t *testing.T) {
 	publisher := &testCallbackPublisher{txErr: errors.New("callback down")}
 	store := &testSubscriptionStore{pending: make(map[string]*models.PendingCallback)}
 	s := &subscriptionService{
-		cfg:              &config.Config{Connector: &config.Connector{PollIntervalMs: 1}},
+		cfg:              &config.Config{Connector: &config.Connector{Pollintervalms: 1}},
 		publisher:        publisher,
 		store:            store,
 		publishedState:   make(map[string]models.PublishedTxState),

@@ -15,19 +15,19 @@ mysql:
   host: "mysql01.dev.lls.com"
   port: 4120
   database: "projectc-solana-connector"
-  maxOpenconns: 200
-  maxIdleConns: 200
-  connMaxLifeSec: 300
+  maxopenconns: 200
+  maxidleconns: 200
+  connmaxlifesec: 300
 callback:
   httpurl: "http://unblock-custodial-wallet/api/v1/inner/wallet/callback"
   username: "test"
   password: "test"
 wallet:
-  privateKeyBase58: "3gYXva9KjKJ83YXZ5Mmztq3fPDs7YdMygqxapETUXoTW4dN79v9Efuccjjb1AQDgjgGfTjYYXDxDS3p5seZJBKSw"
-  fromAddress: "HezSa158cnJFpCJZwGQ5BE6DoZVdKNtrk31MjB1VdYmM"
+  privatekeybase58: "3gYXva9KjKJ83YXZ5Mmztq3fPDs7YdMygqxapETUXoTW4dN79v9Efuccjjb1AQDgjgGfTjYYXDxDS3p5seZJBKSw"
+  fromaddress: "HezSa158cnJFpCJZwGQ5BE6DoZVdKNtrk31MjB1VdYmM"
 networks:
-  networkCode: "solana"
-  chainId: "devnet"
-  nativeSymbol: "SOL"
-  rpcUrl: "https://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
-  wsUrl: "wss://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
+  networkcode: "solana"
+  chainid: "devnet"
+  nativesymbol: "SOL"
+  rpcurl: "https://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
+  wsurl: "wss://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"

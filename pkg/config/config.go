@@ -94,8 +94,8 @@ func normalizeConfig(c *Config) {
 	if c.Log == nil {
 		c.Log = &Log{}
 	}
-	if c.MySQL == nil {
-		c.MySQL = &MySQLConfig{}
+	if c.Mysql == nil {
+		c.Mysql = &MySQLConfig{}
 	}
 	if c.Callback == nil {
 		c.Callback = &CallbackConfig{}
@@ -106,26 +106,23 @@ func normalizeConfig(c *Config) {
 	if c.Connector == nil {
 		c.Connector = &Connector{}
 	}
-	if c.Connector.PollIntervalMs == 0 {
-		c.Connector.PollIntervalMs = 15000
+	if c.Connector.Pollintervalms == 0 {
+		c.Connector.Pollintervalms = 15000
 	}
-	if c.Connector.TxSubscribeWindow == 0 {
-		c.Connector.TxSubscribeWindow = 300
+	if c.Connector.Txsubscribewindow == 0 {
+		c.Connector.Txsubscribewindow = 300
 	}
-	if c.MySQL.MaxOpenConns == 0 {
-		c.MySQL.MaxOpenConns = c.MySQL.MaxOpenConnsV2
+	if c.Mysql.Maxopenconns == 0 {
+		c.Mysql.Maxopenconns = 10
 	}
-	if c.MySQL.MaxOpenConns == 0 {
-		c.MySQL.MaxOpenConns = 10
+	if c.Mysql.Maxidleconns == 0 {
+		c.Mysql.Maxidleconns = 5
 	}
-	if c.MySQL.MaxIdleConns == 0 {
-		c.MySQL.MaxIdleConns = 5
+	if c.Mysql.Connmaxlifesec == 0 {
+		c.Mysql.Connmaxlifesec = 300
 	}
-	if c.MySQL.ConnMaxLifeSec == 0 {
-		c.MySQL.ConnMaxLifeSec = 300
-	}
-	if c.MySQL.DSN == "" && c.MySQL.Host != "" {
-		c.MySQL.DSN = buildMySQLDSN(c.MySQL)
+	if c.Mysql.Dsn == "" && c.Mysql.Host != "" {
+		c.Mysql.Dsn = buildMySQLDSN(c.Mysql)
 	}
 	if c.Networks == nil {
 		c.Networks = &SolanaNetwork{}
@@ -133,11 +130,11 @@ func normalizeConfig(c *Config) {
 	if c.Tokens == nil {
 		c.Tokens = make(map[string]*Token)
 	}
-	if c.Networks.Code == "" {
-		c.Networks.Code = "solana"
+	if c.Networks.Networkcode == "" {
+		c.Networks.Networkcode = "solana"
 	}
-	if c.Networks.NativeSymbol == "" {
-		c.Networks.NativeSymbol = "SOL"
+	if c.Networks.Nativesymbol == "" {
+		c.Networks.Nativesymbol = "SOL"
 	}
 }
 
@@ -168,9 +165,9 @@ func applyNetworkEndpointEnvOverrides(c *Config, envs []string) {
 
 		switch field {
 		case "rpcUrl":
-			c.Networks.RPCURL = value
+			c.Networks.Rpcurl = value
 		case "wsUrl":
-			c.Networks.WSURL = value
+			c.Networks.Wsurl = value
 		}
 	}
 }
