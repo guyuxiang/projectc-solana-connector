@@ -399,7 +399,7 @@ func bindJSON(c *gin.Context, req interface{}) bool {
 func ok(c *gin.Context, data interface{}) {
 	c.JSON(http.StatusOK, models.Response{
 		Code:    "200",
-		Message: "",
+		Message: "success",
 		Data:    data,
 	})
 }
