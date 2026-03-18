@@ -37,15 +37,9 @@ type Connector struct {
 }
 
 type CallbackConfig struct {
-	Mode              string `yaml:"mode"`
-	HTTPURL           string `yaml:"httpurl"`
-	URL               string `yaml:"url"`
-	Host              string `yaml:"host"`
-	Port              int    `yaml:"port"`
-	Username          string `yaml:"username"`
-	Password          string `yaml:"password"`
-	VirtualHost       string `yaml:"virtualHost"`
-	VirtualHostLegacy string `yaml:"virtual-host"`
+	HTTPURL  string `yaml:"httpurl"`
+	Username string `yaml:"username"`
+	Password string `yaml:"password"`
 }
 
 type MySQLConfig struct {

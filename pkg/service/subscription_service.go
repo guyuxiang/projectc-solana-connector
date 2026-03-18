@@ -2,6 +2,7 @@ package service
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"sort"
 	"sync"
@@ -24,15 +25,16 @@ type SubscriptionService interface {
 
 func NewSubscriptionService(cfg *config.Config, chain ChainService, publisher callback.CallbackPublisher, subscriptionStore store.SubscriptionStore) SubscriptionService {
 	s := &subscriptionService{
-		cfg:             cfg,
-		chain:           chain,
-		publisher:       publisher,
-		store:           subscriptionStore,
-		txSubs:          make(map[string]*models.TxSubscription),
-		addressSubs:     make(map[string]*models.AddressSubscription),
-		publishedState:  make(map[string]models.PublishedTxState),
-		txWatchers:      make(map[string]context.CancelFunc),
-		addressWatchers: make(map[string]context.CancelFunc),
+		cfg:              cfg,
+		chain:            chain,
+		publisher:        publisher,
+		store:            subscriptionStore,
+		txSubs:           make(map[string]*models.TxSubscription),
+		addressSubs:      make(map[string]*models.AddressSubscription),
+		publishedState:   make(map[string]models.PublishedTxState),
+		pendingCallbacks: make(map[string]*models.PendingCallback),
+		txWatchers:       make(map[string]context.CancelFunc),
+		addressWatchers:  make(map[string]context.CancelFunc),
 	}
 	s.restore()
 	s.start()
@@ -45,12 +47,13 @@ type subscriptionService struct {
 	publisher callback.CallbackPublisher
 	store     store.SubscriptionStore
 
-	mu              sync.RWMutex
-	txSubs          map[string]*models.TxSubscription
-	addressSubs     map[string]*models.AddressSubscription
-	publishedState  map[string]models.PublishedTxState
-	txWatchers      map[string]context.CancelFunc
-	addressWatchers map[string]context.CancelFunc
+	mu               sync.RWMutex
+	txSubs           map[string]*models.TxSubscription
+	addressSubs      map[string]*models.AddressSubscription
+	publishedState   map[string]models.PublishedTxState
+	pendingCallbacks map[string]*models.PendingCallback
+	txWatchers       map[string]context.CancelFunc
+	addressWatchers  map[string]context.CancelFunc
 }
 
 func (s *subscriptionService) RegisterTxSubscription(req models.TxSubscribeRequest) error {
@@ -139,7 +142,8 @@ func (s *subscriptionService) restore() {
 	s.txSubs = snapshot.TxSubs
 	s.addressSubs = snapshot.AddressSubs
 	s.publishedState = snapshot.PublishedState
-	log.Infof("subscription state restored txSubs=%d addressSubs=%d trackedTxs=%d", len(s.txSubs), len(s.addressSubs), len(s.publishedState))
+	s.pendingCallbacks = snapshot.PendingCallbacks
+	log.Infof("subscription state restored txSubs=%d addressSubs=%d trackedTxs=%d pendingCallbacks=%d", len(s.txSubs), len(s.addressSubs), len(s.publishedState), len(s.pendingCallbacks))
 }
 
 func (s *subscriptionService) resumeWatchers() {
@@ -162,6 +166,7 @@ func (s *subscriptionService) poll(ctx context.Context) {
 	s.pollTxSubscriptions(ctx, latest.BlockNumber)
 	s.pollTrackedTransactions(ctx, latest.BlockNumber)
 	s.pollAddressSubscriptions()
+	s.retryPendingCallbacks()
 }
 
 func (s *subscriptionService) pollTxSubscriptions(ctx context.Context, latestBlock uint64) {
@@ -544,13 +549,13 @@ func (s *subscriptionService) transitionTxState(txCode string, newState string, 
 			Tx:       tx,
 			TxEvents: txEvents,
 		}
-		if err := s.publisher.PublishTx(msg); err != nil {
-			return err
+		if err := s.publishTxCallback(txCode, next.NetworkCode, msg); err != nil {
+			log.Warningf("publish tx callback failed network=%s tx=%s err=%v", next.NetworkCode, txCode, err)
 		}
 	}
 
 	if newState == models.TxStateReverted {
-		if err := s.publisher.PublishRollback(models.TxRollbackMessage{
+		if err := s.publishRollbackCallback(txCode, next.NetworkCode, models.TxRollbackMessage{
 			TxCode:      txCode,
 			NetworkCode: next.NetworkCode,
 		}); err != nil {
@@ -572,6 +577,137 @@ func (s *subscriptionService) getTrackedState(txCode string) models.PublishedTxS
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	return s.publishedState[txCode]
+}
+
+func (s *subscriptionService) publishTxCallback(txCode string, networkCode string, msg models.TxCallbackMessage) error {
+	if err := s.publisher.PublishTx(msg); err != nil {
+		return s.enqueuePendingCallback(callbackTaskID(models.CallbackKindTx, txCode), models.CallbackKindTx, txCode, networkCode, msg, err)
+	}
+	return s.clearPendingCallback(callbackTaskID(models.CallbackKindTx, txCode))
+}
+
+func (s *subscriptionService) publishRollbackCallback(txCode string, networkCode string, msg models.TxRollbackMessage) error {
+	if err := s.publisher.PublishRollback(msg); err != nil {
+		return s.enqueuePendingCallback(callbackTaskID(models.CallbackKindRollback, txCode), models.CallbackKindRollback, txCode, networkCode, msg, err)
+	}
+	return s.clearPendingCallback(callbackTaskID(models.CallbackKindRollback, txCode))
+}
+
+func (s *subscriptionService) enqueuePendingCallback(taskID string, kind string, txCode string, networkCode string, payload interface{}, cause error) error {
+	raw, err := json.Marshal(payload)
+	if err != nil {
+		return err
+	}
+
+	s.mu.Lock()
+	pending, ok := s.pendingCallbacks[taskID]
+	if !ok || pending == nil {
+		pending = &models.PendingCallback{
+			TaskID:      taskID,
+			Kind:        kind,
+			TxCode:      txCode,
+			NetworkCode: networkCode,
+			CreatedAt:   time.Now(),
+		}
+	}
+	pending.PayloadJSON = string(raw)
+	pending.NetworkCode = networkCode
+	pending.RetryCount++
+	pending.LastError = cause.Error()
+	pending.NextRetryAt = time.Now().Add(s.callbackRetryInterval())
+	s.pendingCallbacks[taskID] = pending
+	toSave := clonePendingCallback(pending)
+	s.mu.Unlock()
+
+	if err := s.store.SavePendingCallback(context.Background(), toSave); err != nil {
+		return err
+	}
+	return cause
+}
+
+func (s *subscriptionService) clearPendingCallback(taskID string) error {
+	s.mu.Lock()
+	_, ok := s.pendingCallbacks[taskID]
+	if ok {
+		delete(s.pendingCallbacks, taskID)
+	}
+	s.mu.Unlock()
+	if !ok {
+		return nil
+	}
+	return s.store.DeletePendingCallback(context.Background(), taskID)
+}
+
+func (s *subscriptionService) retryPendingCallbacks() {
+	now := time.Now()
+	s.mu.RLock()
+	pending := make([]*models.PendingCallback, 0, len(s.pendingCallbacks))
+	for _, item := range s.pendingCallbacks {
+		if item == nil || item.NextRetryAt.After(now) {
+			continue
+		}
+		pending = append(pending, clonePendingCallback(item))
+	}
+	s.mu.RUnlock()
+
+	for _, item := range pending {
+		if err := s.retryPendingCallback(item); err != nil {
+			log.Warningf("retry pending callback failed task=%s kind=%s tx=%s err=%v", item.TaskID, item.Kind, item.TxCode, err)
+		}
+	}
+}
+
+func (s *subscriptionService) retryPendingCallback(item *models.PendingCallback) error {
+	switch item.Kind {
+	case models.CallbackKindTx:
+		var msg models.TxCallbackMessage
+		if err := json.Unmarshal([]byte(item.PayloadJSON), &msg); err != nil {
+			return s.failPendingCallback(item, fmt.Errorf("unmarshal tx callback payload: %w", err))
+		}
+		if err := s.publisher.PublishTx(msg); err != nil {
+			return s.failPendingCallback(item, err)
+		}
+	case models.CallbackKindRollback:
+		var msg models.TxRollbackMessage
+		if err := json.Unmarshal([]byte(item.PayloadJSON), &msg); err != nil {
+			return s.failPendingCallback(item, fmt.Errorf("unmarshal rollback callback payload: %w", err))
+		}
+		if err := s.publisher.PublishRollback(msg); err != nil {
+			return s.failPendingCallback(item, err)
+		}
+	default:
+		return s.failPendingCallback(item, fmt.Errorf("unsupported callback kind=%s", item.Kind))
+	}
+	return s.clearPendingCallback(item.TaskID)
+}
+
+func (s *subscriptionService) failPendingCallback(item *models.PendingCallback, cause error) error {
+	s.mu.Lock()
+	current, ok := s.pendingCallbacks[item.TaskID]
+	if !ok || current == nil {
+		current = clonePendingCallback(item)
+	}
+	current.RetryCount++
+	current.LastError = cause.Error()
+	current.NextRetryAt = time.Now().Add(s.callbackRetryInterval())
+	s.pendingCallbacks[item.TaskID] = current
+	toSave := clonePendingCallback(current)
+	s.mu.Unlock()
+	if err := s.store.SavePendingCallback(context.Background(), toSave); err != nil {
+		return err
+	}
+	return cause
+}
+
+func (s *subscriptionService) callbackRetryInterval() time.Duration {
+	if s.cfg != nil && s.cfg.Connector != nil && s.cfg.Connector.PollIntervalMs > 0 {
+		return time.Duration(s.cfg.Connector.PollIntervalMs) * time.Millisecond
+	}
+	return time.Duration(defaultRequestTimeoutMs) * time.Millisecond
+}
+
+func callbackTaskID(kind string, txCode string) string {
+	return kind + ":" + txCode
 }
 
 func (s *subscriptionService) persistAddressSnapshot(sub *models.AddressSubscription) error {
@@ -648,6 +784,14 @@ func cloneAddressSub(sub *models.AddressSubscription) *models.AddressSubscriptio
 			copy.AccountCheckpoints[account] = checkpoint
 		}
 	}
+	return &copy
+}
+
+func clonePendingCallback(pending *models.PendingCallback) *models.PendingCallback {
+	if pending == nil {
+		return nil
+	}
+	copy := *pending
 	return &copy
 }
 

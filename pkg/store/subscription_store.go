@@ -20,6 +20,8 @@ type SubscriptionStore interface {
 	SaveAddressSubscription(ctx context.Context, sub *models.AddressSubscription) error
 	UpdateAddressSubscriptionStatus(ctx context.Context, address string, status string) error
 	SavePublishedState(ctx context.Context, txCode string, state models.PublishedTxState) error
+	SavePendingCallback(ctx context.Context, pending *models.PendingCallback) error
+	DeletePendingCallback(ctx context.Context, taskID string) error
 }
 
 func NewSubscriptionStore(cfg *config.Config) (SubscriptionStore, error) {
@@ -66,6 +68,21 @@ type publishedStateModel struct {
 
 func (publishedStateModel) TableName() string { return "connector_published_states" }
 
+type pendingCallbackModel struct {
+	TaskID      string    `gorm:"column:task_id;primaryKey;size:160"`
+	Kind        string    `gorm:"column:kind;size:32;not null"`
+	TxCode      string    `gorm:"column:tx_code;size:128;not null"`
+	NetworkCode string    `gorm:"column:network_code;size:64;not null"`
+	PayloadJSON string    `gorm:"column:payload_json;type:longtext"`
+	RetryCount  uint64    `gorm:"column:retry_count;not null"`
+	LastError   string    `gorm:"column:last_error;type:text"`
+	NextRetryAt time.Time `gorm:"column:next_retry_at;not null"`
+	CreatedAt   time.Time `gorm:"column:created_at;autoCreateTime"`
+	UpdatedAt   time.Time `gorm:"column:updated_at;autoUpdateTime"`
+}
+
+func (pendingCallbackModel) TableName() string { return "connector_pending_callbacks" }
+
 func newMySQLSubscriptionStore(cfg *config.MySQLConfig) (SubscriptionStore, error) {
 	if cfg == nil || cfg.DSN == "" {
 		return nil, errors.New("mysql.dsn is required")
@@ -96,14 +113,16 @@ func (s *mySQLSubscriptionStore) migrate() error {
 		&txSubscriptionModel{},
 		&addressSubscriptionModel{},
 		&publishedStateModel{},
+		&pendingCallbackModel{},
 	)
 }
 
 func (s *mySQLSubscriptionStore) Load(ctx context.Context) (*models.SubscriptionSnapshot, error) {
 	snapshot := &models.SubscriptionSnapshot{
-		TxSubs:         make(map[string]*models.TxSubscription),
-		AddressSubs:    make(map[string]*models.AddressSubscription),
-		PublishedState: make(map[string]models.PublishedTxState),
+		TxSubs:           make(map[string]*models.TxSubscription),
+		AddressSubs:      make(map[string]*models.AddressSubscription),
+		PublishedState:   make(map[string]models.PublishedTxState),
+		PendingCallbacks: make(map[string]*models.PendingCallback),
 	}
 
 	var txRows []txSubscriptionModel
@@ -177,6 +196,24 @@ func (s *mySQLSubscriptionStore) Load(ctx context.Context) (*models.Subscription
 			NetworkCode: row.NetworkCode,
 			BlockNumber: row.BlockNumber,
 			State:       row.State,
+		}
+	}
+
+	var pendingRows []pendingCallbackModel
+	if err := s.db.WithContext(ctx).Find(&pendingRows).Error; err != nil {
+		return nil, err
+	}
+	for _, row := range pendingRows {
+		snapshot.PendingCallbacks[row.TaskID] = &models.PendingCallback{
+			TaskID:      row.TaskID,
+			Kind:        row.Kind,
+			TxCode:      row.TxCode,
+			NetworkCode: row.NetworkCode,
+			PayloadJSON: row.PayloadJSON,
+			RetryCount:  row.RetryCount,
+			LastError:   row.LastError,
+			NextRetryAt: row.NextRetryAt,
+			CreatedAt:   row.CreatedAt,
 		}
 	}
 	return snapshot, nil
@@ -258,6 +295,30 @@ func (s *mySQLSubscriptionStore) SavePublishedState(ctx context.Context, txCode 
 			"network_code", "block_number", "state", "updated_at",
 		}),
 	}).Create(&model).Error
+}
+
+func (s *mySQLSubscriptionStore) SavePendingCallback(ctx context.Context, pending *models.PendingCallback) error {
+	model := pendingCallbackModel{
+		TaskID:      pending.TaskID,
+		Kind:        pending.Kind,
+		TxCode:      pending.TxCode,
+		NetworkCode: pending.NetworkCode,
+		PayloadJSON: pending.PayloadJSON,
+		RetryCount:  pending.RetryCount,
+		LastError:   pending.LastError,
+		NextRetryAt: pending.NextRetryAt,
+		CreatedAt:   pending.CreatedAt,
+	}
+	return s.db.WithContext(ctx).Clauses(clause.OnConflict{
+		Columns: []clause.Column{{Name: "task_id"}},
+		DoUpdates: clause.AssignmentColumns([]string{
+			"kind", "tx_code", "network_code", "payload_json", "retry_count", "last_error", "next_retry_at", "updated_at",
+		}),
+	}).Create(&model).Error
+}
+
+func (s *mySQLSubscriptionStore) DeletePendingCallback(ctx context.Context, taskID string) error {
+	return s.db.WithContext(ctx).Where("task_id = ?", taskID).Delete(&pendingCallbackModel{}).Error
 }
 
 func addressSubscriptionLegacyCheckpoint(sub *models.AddressSubscription) (uint64, string) {

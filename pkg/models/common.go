@@ -196,8 +196,26 @@ type PublishedTxState struct {
 	State       string    `json:"state"`
 }
 
+const (
+	CallbackKindTx       = "tx"
+	CallbackKindRollback = "rollback"
+)
+
+type PendingCallback struct {
+	TaskID      string    `json:"taskId"`
+	Kind        string    `json:"kind"`
+	TxCode      string    `json:"txCode"`
+	NetworkCode string    `json:"networkCode"`
+	PayloadJSON string    `json:"payloadJson"`
+	RetryCount  uint64    `json:"retryCount"`
+	LastError   string    `json:"lastError"`
+	NextRetryAt time.Time `json:"nextRetryAt"`
+	CreatedAt   time.Time `json:"created_at"`
+}
+
 type SubscriptionSnapshot struct {
-	TxSubs         map[string]*TxSubscription
-	AddressSubs    map[string]*AddressSubscription
-	PublishedState map[string]PublishedTxState
+	TxSubs           map[string]*TxSubscription
+	AddressSubs      map[string]*AddressSubscription
+	PublishedState   map[string]PublishedTxState
+	PendingCallbacks map[string]*PendingCallback
 }

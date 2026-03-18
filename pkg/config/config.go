@@ -3,7 +3,6 @@ package config
 import (
 	"encoding/json"
 	"fmt"
-	"net/url"
 	"os"
 	"strings"
 
@@ -110,15 +109,6 @@ func normalizeConfig(c *Config) {
 	}
 	if c.Connector.TxSubscribeWindow == 0 {
 		c.Connector.TxSubscribeWindow = 300
-	}
-	if c.Callback.Mode == "" {
-		c.Callback.Mode = "log"
-	}
-	if c.Callback.VirtualHost == "" && c.Callback.VirtualHostLegacy != "" {
-		c.Callback.VirtualHost = c.Callback.VirtualHostLegacy
-	}
-	if c.Callback.URL == "" && c.Callback.Host != "" {
-		c.Callback.URL = buildAMQPURL(c.Callback)
 	}
 	if c.MySQL.MaxOpenConns == 0 {
 		c.MySQL.MaxOpenConns = c.MySQL.MaxOpenConnsV2
@@ -239,34 +229,6 @@ func cleanStringList(items []string) []string {
 		cleaned = append(cleaned, item)
 	}
 	return cleaned
-}
-
-func buildAMQPURL(cfg *CallbackConfig) string {
-	host := cfg.Host
-	port := cfg.Port
-	if port == 0 {
-		port = 5672
-	}
-	vhost := cfg.VirtualHost
-	if vhost == "" {
-		vhost = "/"
-	}
-	return fmt.Sprintf(
-		"amqp://%s:%s@%s:%d%s",
-		url.QueryEscape(cfg.Username),
-		url.QueryEscape(cfg.Password),
-		host,
-		port,
-		encodeRabbitMQVHost(vhost),
-	)
-}
-
-func encodeRabbitMQVHost(vhost string) string {
-	if vhost == "" || vhost == "/" {
-		return "/"
-	}
-	trimmed := strings.TrimPrefix(vhost, "/")
-	return "/" + url.PathEscape(trimmed)
 }
 
 func buildMySQLDSN(cfg *MySQLConfig) string {

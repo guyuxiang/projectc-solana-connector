@@ -19,13 +19,9 @@ mysql:
   maxIdleConns: 200
   connMaxLifeSec: 300
 callback:
-  mode: "http"
   httpurl: "http://unblock-custodial-wallet/api/v1/inner/wallet/callback"
-  host: "dev-callback.lls.com"
-  port: 5672
-  username: "projectc"
-  password: "projectc"
-  virtual-host: "/projectc-dtt"
+  username: "test"
+  password: "test"
 connector:
   pollIntervalMs: 15000
   txSubscribeWindow: 180

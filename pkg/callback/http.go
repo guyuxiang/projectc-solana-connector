@@ -16,18 +16,26 @@ import (
 )
 
 type httpPublisher struct {
-	baseURL string
-	client  *http.Client
+	baseURL  string
+	username string
+	password string
+	client   *http.Client
 }
 
 func newHTTPPublisher(cfg *config.CallbackConfig) CallbackPublisher {
 	baseURL := ""
+	username := ""
+	password := ""
 	if cfg != nil {
 		baseURL = strings.TrimRight(cfg.HTTPURL, "/")
+		username = cfg.Username
+		password = cfg.Password
 	}
 	log.Infof("New http publisher: %s", baseURL)
 	return &httpPublisher{
-		baseURL: baseURL,
+		baseURL:  baseURL,
+		username: username,
+		password: password,
 		client: &http.Client{
 			Timeout: 10 * time.Second,
 		},
@@ -63,6 +71,7 @@ func (p *httpPublisher) post(path string, payload interface{}) error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/json")
+	req.SetBasicAuth(p.username, p.password)
 
 	resp, err := p.client.Do(req)
 	if err != nil {
