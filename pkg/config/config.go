@@ -1,7 +1,6 @@
 package config
 
 import (
-	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -101,6 +100,9 @@ func normalizeConfig(c *Config) {
 	if c.Callback == nil {
 		c.Callback = &CallbackConfig{}
 	}
+	if c.Wallet == nil {
+		c.Wallet = &WalletConfig{}
+	}
 	if c.Connector == nil {
 		c.Connector = &Connector{}
 	}
@@ -126,24 +128,16 @@ func normalizeConfig(c *Config) {
 		c.MySQL.DSN = buildMySQLDSN(c.MySQL)
 	}
 	if c.Networks == nil {
-		c.Networks = make(map[string]*SolanaNetwork)
+		c.Networks = &SolanaNetwork{}
 	}
 	if c.Tokens == nil {
 		c.Tokens = make(map[string]*Token)
 	}
-	for code, network := range c.Networks {
-		if network == nil {
-			continue
-		}
-		if network.Code == "" {
-			network.Code = code
-		}
-		if network.NativeSymbol == "" {
-			network.NativeSymbol = "SOL"
-		}
-		if network.LamportsPerToken == 0 {
-			network.LamportsPerToken = 1_000_000_000
-		}
+	if c.Networks.Code == "" {
+		c.Networks.Code = "solana"
+	}
+	if c.Networks.NativeSymbol == "" {
+		c.Networks.NativeSymbol = "SOL"
 	}
 }
 
@@ -153,82 +147,43 @@ func applyEnvOverrides(c *Config, envs []string) {
 
 func applyNetworkEndpointEnvOverrides(c *Config, envs []string) {
 	if c.Networks == nil {
-		c.Networks = make(map[string]*SolanaNetwork)
+		c.Networks = &SolanaNetwork{}
 	}
 
 	for _, env := range envs {
 		key, value, ok := strings.Cut(env, "=")
-		if !ok || value == "" || !strings.HasPrefix(key, "NETWORKS_") {
+		if !ok || value == "" {
 			continue
 		}
 
-		networkCode, field := parseNetworkEnvKey(key)
-		if networkCode == "" || field == "" {
+		field := parseNetworkEnvKey(key)
+		if field == "" {
 			continue
 		}
 
-		endpoints := parseStringListEnv(value)
-		if len(endpoints) == 0 {
+		value = strings.TrimSpace(value)
+		if value == "" {
 			continue
-		}
-
-		network := c.Networks[networkCode]
-		if network == nil {
-			network = &SolanaNetwork{}
-			c.Networks[networkCode] = network
 		}
 
 		switch field {
-		case "endpoints":
-			network.Endpoints = endpoints
-		case "wsEndpoints":
-			network.WsEndpoints = endpoints
+		case "rpcUrl":
+			c.Networks.RPCURL = value
+		case "wsUrl":
+			c.Networks.WSURL = value
 		}
 	}
 }
 
-func parseNetworkEnvKey(key string) (string, string) {
-	const prefix = "NETWORKS_"
-	trimmed := strings.TrimPrefix(key, prefix)
-
+func parseNetworkEnvKey(key string) string {
 	switch {
-	case strings.HasSuffix(trimmed, "_WS_ENDPOINTS"):
-		return strings.ToLower(strings.TrimSuffix(trimmed, "_WS_ENDPOINTS")), "wsEndpoints"
-	case strings.HasSuffix(trimmed, "_WSENDPOINTS"):
-		return strings.ToLower(strings.TrimSuffix(trimmed, "_WSENDPOINTS")), "wsEndpoints"
-	case strings.HasSuffix(trimmed, "_ENDPOINTS"):
-		return strings.ToLower(strings.TrimSuffix(trimmed, "_ENDPOINTS")), "endpoints"
+	case key == "NETWORKS_WS_URL" || key == "NETWORKS_WSURL" || key == "NETWORKS_SOLANA_WS_URL" || key == "NETWORKS_SOLANA_WSURL" || key == "NETWORKS_WS_ENDPOINTS" || key == "NETWORKS_WSENDPOINTS" || key == "NETWORKS_SOLANA_WS_ENDPOINTS" || key == "NETWORKS_SOLANA_WSENDPOINTS":
+		return "wsUrl"
+	case key == "NETWORKS_RPC_URL" || key == "NETWORKS_RPCURL" || key == "NETWORKS_SOLANA_RPC_URL" || key == "NETWORKS_SOLANA_RPCURL" || key == "NETWORKS_ENDPOINTS" || key == "NETWORKS_SOLANA_ENDPOINTS":
+		return "rpcUrl"
 	default:
-		return "", ""
+		return ""
 	}
-}
-
-func parseStringListEnv(value string) []string {
-	trimmed := strings.TrimSpace(value)
-	if trimmed == "" {
-		return nil
-	}
-
-	if strings.HasPrefix(trimmed, "[") {
-		var items []string
-		if err := json.Unmarshal([]byte(trimmed), &items); err == nil {
-			return cleanStringList(items)
-		}
-	}
-
-	return cleanStringList(strings.Split(trimmed, ","))
-}
-
-func cleanStringList(items []string) []string {
-	cleaned := make([]string, 0, len(items))
-	for _, item := range items {
-		item = strings.TrimSpace(item)
-		if item == "" {
-			continue
-		}
-		cleaned = append(cleaned, item)
-	}
-	return cleaned
 }
 
 func buildMySQLDSN(cfg *MySQLConfig) string {

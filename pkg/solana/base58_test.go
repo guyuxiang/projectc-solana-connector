@@ -26,7 +26,7 @@ func TestBuildNativeTransferTx(t *testing.T) {
 	toAddress := EncodeBase58(ed25519.NewKeyFromSeed(toSeed)[32:])
 	blockhash := EncodeBase58(bytes.Repeat([]byte{1}, 32))
 
-	txEncoded, fromAddress, err := BuildNativeTransferTx(privateKeyBase58, toAddress, blockhash, 12345, 1000)
+	txEncoded, fromAddress, err := BuildNativeTransferTx(privateKeyBase58, toAddress, blockhash, 12345)
 	if err != nil {
 		t.Fatalf("BuildNativeTransferTx returned error: %v", err)
 	}

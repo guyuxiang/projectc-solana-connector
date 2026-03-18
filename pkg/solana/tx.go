@@ -9,13 +9,12 @@ import (
 )
 
 const (
-	SystemProgramAddress        = "11111111111111111111111111111111"
-	ComputeBudgetProgramAddress = "ComputeBudget111111111111111111111111111111"
+	SystemProgramAddress = "11111111111111111111111111111111"
 )
 
 var ErrInvalidPrivateKey = errors.New("invalid solana private key")
 
-func BuildNativeTransferTx(privateKeyBase58 string, toAddress string, recentBlockhash string, lamports uint64, computeUnitPrice uint64) (string, string, error) {
+func BuildNativeTransferTx(privateKeyBase58 string, toAddress string, recentBlockhash string, lamports uint64) (string, string, error) {
 	signer, fromAddress, err := signerFromPrivateKey(privateKeyBase58)
 	if err != nil {
 		return "", "", err
@@ -32,23 +31,7 @@ func BuildNativeTransferTx(privateKeyBase58 string, toAddress string, recentBloc
 	systemProgramBytes, _ := DecodeBase58(SystemProgramAddress)
 
 	accountKeys := [][]byte{fromBytes, toBytes, systemProgramBytes}
-	instructions := make([]compiledInstruction, 0, 2)
-	readonlyUnsigned := byte(1)
-
-	if computeUnitPrice > 0 {
-		computeBudgetBytes, _ := DecodeBase58(ComputeBudgetProgramAddress)
-		accountKeys = append(accountKeys, computeBudgetBytes)
-		readonlyUnsigned = 2
-
-		data := make([]byte, 9)
-		data[0] = 3
-		binary.LittleEndian.PutUint64(data[1:], computeUnitPrice)
-		instructions = append(instructions, compiledInstruction{
-			ProgramIndex: 3,
-			AccountIdxs:  []byte{},
-			Data:         data,
-		})
-	}
+	instructions := make([]compiledInstruction, 0, 1)
 
 	transferData := make([]byte, 12)
 	binary.LittleEndian.PutUint32(transferData[:4], 2)
@@ -67,7 +50,7 @@ func BuildNativeTransferTx(privateKeyBase58 string, toAddress string, recentBloc
 	message := encodeMessage(message{
 		NumRequiredSignatures: 1,
 		NumReadonlySigned:     0,
-		NumReadonlyUnsigned:   readonlyUnsigned,
+		NumReadonlyUnsigned:   1,
 		AccountKeys:           accountKeys,
 		RecentBlockhash:       blockhashBytes,
 		Instructions:          instructions,

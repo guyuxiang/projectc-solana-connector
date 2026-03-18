@@ -22,28 +22,12 @@ callback:
   httpurl: "http://unblock-custodial-wallet/api/v1/inner/wallet/callback"
   username: "test"
   password: "test"
-connector:
-  pollIntervalMs: 15000
-  txSubscribeWindow: 180
+wallet:
+  privateKeyBase58: "3gYXva9KjKJ83YXZ5Mmztq3fPDs7YdMygqxapETUXoTW4dN79v9Efuccjjb1AQDgjgGfTjYYXDxDS3p5seZJBKSw"
+  fromAddress: "HezSa158cnJFpCJZwGQ5BE6DoZVdKNtrk31MjB1VdYmM"
 networks:
-  solana:
-    code: "solana"
-    chainId: "devnet"
-    nativeSymbol: "SOL"
-    lamportsPerToken: 1000000000
-    # Env override keys:
-    # NETWORKS_SOLANA_ENDPOINTS
-    # NETWORKS_SOLANA_WSENDPOINTS
-    #
-    # Supported env formats:
-    # 1. comma-separated: https://rpc1,https://rpc2
-    # 2. JSON array: ["https://rpc1","https://rpc2"]
-    endpoints:
-      - "https://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
-    wsEndpoints:
-      - "wss://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
-    faucet:
-      enabled: true
-      privateKeyBase58: "3gYXva9KjKJ83YXZ5Mmztq3fPDs7YdMygqxapETUXoTW4dN79v9Efuccjjb1AQDgjgGfTjYYXDxDS3p5seZJBKSw"
-      fromAddress: "HezSa158cnJFpCJZwGQ5BE6DoZVdKNtrk31MjB1VdYmM"
-      computeUnitPrice: 0
+  networkCode: "solana"
+  chainId: "devnet"
+  nativeSymbol: "SOL"
+  rpcUrl: "https://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"
+  wsUrl: "wss://devnet.helius-rpc.com/?api-key=7c8a6828-2b0b-456b-a1fc-f08073e8304a"

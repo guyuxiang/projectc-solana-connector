@@ -1,15 +1,16 @@
 package config
 
 type Config struct {
-	Server    *Server                   `yaml:"server"`
-	Auth      *Auth                     `yaml:"auth"`
-	MySQL     *MySQLConfig              `yaml:"mysql"`
-	Callback  *CallbackConfig           `yaml:"callback"`
-	Gin       *Gin                      `yaml:"gin"`
-	Log       *Log                      `yaml:"log"`
-	Connector *Connector                `yaml:"connector"`
-	Networks  map[string]*SolanaNetwork `yaml:"networks"`
-	Tokens    map[string]*Token         `yaml:"-" mapstructure:"-"`
+	Server    *Server           `yaml:"server"`
+	Auth      *Auth             `yaml:"auth"`
+	MySQL     *MySQLConfig      `yaml:"mysql"`
+	Callback  *CallbackConfig   `yaml:"callback"`
+	Wallet    *WalletConfig     `yaml:"wallet"`
+	Gin       *Gin              `yaml:"gin"`
+	Log       *Log              `yaml:"log"`
+	Connector *Connector        `yaml:"connector"`
+	Networks  *SolanaNetwork    `yaml:"networks"`
+	Tokens    map[string]*Token `yaml:"-" mapstructure:"-"`
 }
 
 type Server struct {
@@ -56,20 +57,16 @@ type MySQLConfig struct {
 }
 
 type SolanaNetwork struct {
-	Code             string        `yaml:"code"`
-	ChainID          string        `yaml:"chainId"`
-	NativeSymbol     string        `yaml:"nativeSymbol"`
-	LamportsPerToken uint64        `yaml:"lamportsPerToken"`
-	Endpoints        []string      `yaml:"endpoints"`
-	WsEndpoints      []string      `yaml:"wsEndpoints"`
-	Faucet           *FaucetConfig `yaml:"faucet"`
+	Code         string `yaml:"networkCode"`
+	ChainID      string `yaml:"chainId"`
+	NativeSymbol string `yaml:"nativeSymbol"`
+	RPCURL       string `yaml:"rpcUrl"`
+	WSURL        string `yaml:"wsUrl"`
 }
 
-type FaucetConfig struct {
-	Enabled          bool   `yaml:"enabled"`
+type WalletConfig struct {
 	PrivateKeyBase58 string `yaml:"privateKeyBase58"`
 	FromAddress      string `yaml:"fromAddress"`
-	ComputeUnitPrice uint64 `yaml:"computeUnitPrice"`
 }
 
 type Token struct {

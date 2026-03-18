@@ -43,23 +43,24 @@ type ChainService interface {
 func NewChainService(cfg *config.Config, tokenStore store.TokenStore) ChainService {
 	timeout := time.Duration(defaultRequestTimeoutMs) * time.Millisecond
 	backoff := time.Duration(defaultRetryBackoffMs) * time.Millisecond
-	clients := make(map[string]*solana.Client, len(cfg.Networks))
-	wsClients := make(map[string]*solana.WSClient, len(cfg.Networks))
-	for code, network := range cfg.Networks {
-		clients[code] = solana.NewClient(network.Endpoints, timeout, defaultRetryTimes, backoff, defaultRPCCommitment)
-		wsEndpoints := network.WsEndpoints
-		if len(wsEndpoints) == 0 {
-			wsEndpoints = solana.DeriveWSEndpoints(network.Endpoints)
-		}
-		idleTimeout := time.Duration(defaultWSIdleTimeoutMs) * time.Millisecond
-		wsClients[code] = solana.NewWSClient(wsEndpoints, timeout, idleTimeout)
+	clients := make(map[string]*solana.Client, 1)
+	wsClients := make(map[string]*solana.WSClient, 1)
+	network := mustResolveSingleNetwork(cfg)
+	clients[network.Code] = solana.NewClient([]string{network.RPCURL}, timeout, defaultRetryTimes, backoff, defaultRPCCommitment)
+	wsEndpoints := []string{}
+	if network.WSURL != "" {
+		wsEndpoints = []string{network.WSURL}
+	} else {
+		wsEndpoints = solana.DeriveWSEndpoints([]string{network.RPCURL})
 	}
+	idleTimeout := time.Duration(defaultWSIdleTimeoutMs) * time.Millisecond
+	wsClients[network.Code] = solana.NewWSClient(wsEndpoints, timeout, idleTimeout)
 	return &chainService{
 		cfg:              cfg,
 		tokenStore:       tokenStore,
 		clients:          clients,
 		wsClients:        wsClients,
-		network:          mustResolveSingleNetwork(cfg),
+		network:          network,
 		idempotencyStore: newIdempotencyStore(time.Duration(defaultIdempotencyTTLSeconds) * time.Second),
 	}
 }
@@ -112,16 +113,15 @@ func (s *chainService) Faucet(ctx context.Context, req models.FaucetRequest) (st
 	if err != nil {
 		return "", err
 	}
-	network := s.network
-	if network.Faucet == nil || !network.Faucet.Enabled {
-		return "", errors.New("faucet is disabled")
+	if s.cfg.Wallet == nil || s.cfg.Wallet.PrivateKeyBase58 == "" {
+		return "", errors.New("wallet.privateKeyBase58 is required")
 	}
 
 	if txCode, ok := s.idempotencyStore.Get(req.IdempotencyKey); ok {
 		return txCode, nil
 	}
 
-	lamports, err := toLamports(req.Value, network.LamportsPerToken)
+	lamports, err := toLamports(req.Value, solanaLamportsPerSOL)
 	if err != nil {
 		return "", err
 	}
@@ -132,12 +132,12 @@ func (s *chainService) Faucet(ctx context.Context, req models.FaucetRequest) (st
 		return "", err
 	}
 
-	encodedTx, fromAddress, err := solana.BuildNativeTransferTx(network.Faucet.PrivateKeyBase58, req.AcceptAddress, latest.Value.Blockhash, lamports, network.Faucet.ComputeUnitPrice)
+	encodedTx, fromAddress, err := solana.BuildNativeTransferTx(s.cfg.Wallet.PrivateKeyBase58, req.AcceptAddress, latest.Value.Blockhash, lamports)
 	if err != nil {
 		return "", err
 	}
-	if network.Faucet.FromAddress != "" && !strings.EqualFold(network.Faucet.FromAddress, fromAddress) {
-		return "", errors.New("faucet private key does not match configured fromAddress")
+	if s.cfg.Wallet.FromAddress != "" && !strings.EqualFold(s.cfg.Wallet.FromAddress, fromAddress) {
+		return "", errors.New("wallet private key does not match configured fromAddress")
 	}
 
 	txCode, err := s.SendSignedTransaction(ctx, encodedTx)
@@ -181,7 +181,7 @@ func (s *chainService) GetAddressBalance(ctx context.Context, address string) (*
 		return nil, err
 	}
 	return &models.AddressBalanceResponse{
-		Balance:     fromLamports(resp.Value, network.LamportsPerToken),
+		Balance:     fromLamports(resp.Value, solanaLamportsPerSOL),
 		BalanceUnit: network.NativeSymbol,
 	}, nil
 }
@@ -606,16 +606,13 @@ func (s *idempotencyStore) Put(key string, txCode string) {
 }
 
 func mustResolveSingleNetwork(cfg *config.Config) *config.SolanaNetwork {
-	if len(cfg.Networks) != 1 {
-		panic("solana connector requires exactly one configured network")
+	if cfg.Networks == nil {
+		panic("solana connector network config is empty")
 	}
-	for _, network := range cfg.Networks {
-		if network == nil {
-			break
-		}
-		return network
+	if cfg.Networks.RPCURL == "" {
+		panic("solana connector network endpoint is empty")
 	}
-	panic("solana connector network config is empty")
+	return cfg.Networks
 }
 
 func (s *idempotencyStore) gcLocked() {

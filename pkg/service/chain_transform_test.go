@@ -38,7 +38,7 @@ func TestToChainTxAndEvents(t *testing.T) {
 		},
 	}
 
-	network := &config.SolanaNetwork{LamportsPerToken: 1_000_000_000}
+	network := &config.SolanaNetwork{}
 	chainTx := toChainTx(network, tx)
 	if chainTx.Code != "sig-1" || chainTx.From != "from-address" || chainTx.To != "to-address" || chainTx.Amount != "1.5" {
 		t.Fatalf("unexpected chain tx: %+v", chainTx)
@@ -77,7 +77,7 @@ func TestToChainTxFallbacksToSignerAndProgramIDWithoutNativeTransfer(t *testing.
 		},
 	}
 
-	network := &config.SolanaNetwork{LamportsPerToken: 1_000_000_000}
+	network := &config.SolanaNetwork{}
 	chainTx := toChainTx(network, tx)
 	if chainTx.From != "signer-address" || chainTx.To != "TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA" || chainTx.Amount != "0" {
 		t.Fatalf("unexpected fallback chain tx: %+v", chainTx)
@@ -153,7 +153,7 @@ func TestToChainEventsTransformsSPLTokenBusinessEvents(t *testing.T) {
 			},
 		},
 	}
-	network := &config.SolanaNetwork{Code: "solana-devnet", LamportsPerToken: 1_000_000_000}
+	network := &config.SolanaNetwork{Code: "solana-devnet"}
 	events := toChainEvents(cfg, network, tx)
 	if len(events) != 3 {
 		t.Fatalf("unexpected events length: %+v", events)

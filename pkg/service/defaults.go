@@ -8,4 +8,5 @@ const (
 	defaultRetryBackoffMs        = 3000
 	defaultWSIdleTimeoutMs       = 90000
 	defaultIdempotencyTTLSeconds = 3600
+	solanaLamportsPerSOL         = 1_000_000_000
 )

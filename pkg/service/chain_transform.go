@@ -40,7 +40,7 @@ func toChainTx(network *config.SolanaNetwork, tx solana.TransactionResult) model
 		From:        from,
 		To:          to,
 		Amount:      amount,
-		Fee:         strconv.FormatFloat(fromLamports(tx.Meta.Fee, network.LamportsPerToken), 'f', -1, 64),
+		Fee:         strconv.FormatFloat(fromLamports(tx.Meta.Fee, solanaLamportsPerSOL), 'f', -1, 64),
 	}
 }
 
@@ -116,7 +116,7 @@ func extractNativeTransferSummary(tx solana.TransactionResult, network *config.S
 		if !ok {
 			return from, to, "0", true
 		}
-		return from, to, strconv.FormatFloat(fromLamports(uint64(asFloat(rawLamports)), network.LamportsPerToken), 'f', -1, 64), true
+		return from, to, strconv.FormatFloat(fromLamports(uint64(asFloat(rawLamports)), solanaLamportsPerSOL), 'f', -1, 64), true
 	}
 	return "", "", "", false
 }
