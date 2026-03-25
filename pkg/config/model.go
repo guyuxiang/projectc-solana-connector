@@ -5,6 +5,7 @@ type Config struct {
 	Auth      *Auth             `yaml:"auth"`
 	Mysql     *MySQLConfig      `yaml:"mysql"`
 	Callback  *CallbackConfig   `yaml:"callback"`
+	RabbitMQ  *RabbitMQConfig   `yaml:"rabbitmq"`
 	Wallet    *WalletConfig     `yaml:"wallet"`
 	Gin       *Gin              `yaml:"gin"`
 	Log       *Log              `yaml:"log"`
@@ -41,6 +42,16 @@ type CallbackConfig struct {
 	Httpurl  string `yaml:"httpurl"`
 	Username string `yaml:"username"`
 	Password string `yaml:"password"`
+}
+
+type RabbitMQConfig struct {
+	Enabled          bool   `yaml:"enabled"`
+	URL              string `yaml:"url"`
+	TxExchange       string `yaml:"txExchange"`
+	RollbackExchange string `yaml:"rollbackExchange"`
+	RetryDelayMs     int    `yaml:"retryDelayMs"`
+	MaxRetry         int    `yaml:"maxRetry"`
+	PrefetchCount    int    `yaml:"prefetchCount"`
 }
 
 type MySQLConfig struct {

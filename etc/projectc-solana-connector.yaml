@@ -22,6 +22,14 @@ callback:
   httpurl: "http://unblock-custodial-wallet/api/v1/inner/wallet/callback"
   username: "test"
   password: "test"
+rabbitmq:
+  enabled: true
+  url: "amqp://guest:guest@rabbitmq:5672/"
+  txExchange: "tx_callback_fanout_exchange"
+  rollbackExchange: "tx_callback_cancel_fanout_exchange"
+  retryDelayMs: 30000
+  maxRetry: 5
+  prefetchCount: 10
 wallet:
   privatekeybase58: "3gYXva9KjKJ83YXZ5Mmztq3fPDs7YdMygqxapETUXoTW4dN79v9Efuccjjb1AQDgjgGfTjYYXDxDS3p5seZJBKSw"
   fromaddress: "HezSa158cnJFpCJZwGQ5BE6DoZVdKNtrk31MjB1VdYmM"

@@ -14,5 +14,8 @@ func NewCallbackPublisher(cfg *config.Config) CallbackPublisher {
 	if cfg == nil {
 		return newHTTPPublisher(nil)
 	}
+	if shouldUseRabbitMQ(cfg.RabbitMQ) {
+		return newRabbitMQPublisher(cfg.RabbitMQ)
+	}
 	return newHTTPPublisher(cfg.Callback)
 }

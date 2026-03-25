@@ -100,6 +100,9 @@ func normalizeConfig(c *Config) {
 	if c.Callback == nil {
 		c.Callback = &CallbackConfig{}
 	}
+	if c.RabbitMQ == nil {
+		c.RabbitMQ = &RabbitMQConfig{}
+	}
 	if c.Wallet == nil {
 		c.Wallet = &WalletConfig{}
 	}
@@ -135,6 +138,21 @@ func normalizeConfig(c *Config) {
 	}
 	if c.Networks.Nativesymbol == "" {
 		c.Networks.Nativesymbol = "SOL"
+	}
+	if c.RabbitMQ.TxExchange == "" {
+		c.RabbitMQ.TxExchange = "tx_callback_fanout_exchange"
+	}
+	if c.RabbitMQ.RollbackExchange == "" {
+		c.RabbitMQ.RollbackExchange = "tx_callback_cancel_fanout_exchange"
+	}
+	if c.RabbitMQ.RetryDelayMs <= 0 {
+		c.RabbitMQ.RetryDelayMs = 30000
+	}
+	if c.RabbitMQ.MaxRetry <= 0 {
+		c.RabbitMQ.MaxRetry = 5
+	}
+	if c.RabbitMQ.PrefetchCount <= 0 {
+		c.RabbitMQ.PrefetchCount = 10
 	}
 }
 
